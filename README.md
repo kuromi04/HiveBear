@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="#english">🇬🇧 English</a> | <a href="#español">🇪🇸 Español</a>
+  <a href="#english">🇬🇧 English</a> | <a href="#español">🇪🇸 Español</a> | <a href="docs/HOW_IT_WORKS.md">🧠 Cómo Funciona / How it Works</a>
 </p>
 
 ---
@@ -25,6 +25,7 @@
 ## 🇬🇧 English Documentation
 
 ### 🛠️ Patches & Improvements in this Edition (by @kuromi04)
+- 📖 **New Visual Documentation:** Read our [Beginner's Guide to HiveBear P2P Magic](docs/HOW_IT_WORKS.md).
 - 🚀 **hivebear-coordinator (P2P Signaling Server):** Dedicated, lightweight Rust HTTP server with Docker support to coordinate P2P mesh discovery, STUN hole-punching, and swarm matchmaking worldwide.
 - 🛡️ **Cybersecurity Hardened:** Mitigated Denial-of-Service (DoS) and memory leak risks by bounding signal buffers (max 50 queue per peer) and cleaning inactive state.
 - 📱 **Termux & Mobile Integration ([TermuxHiveBear](https://github.com/kuromi04/TermuxHiveBear)):** Seamlessly connect Android smartphones running Termux to your desktop AI mesh network.
@@ -127,6 +128,7 @@ Before building, install all required dependencies automatically:
 ## 🇪🇸 Documentación en Español
 
 ### 🛠️ Mejoras y Parches de esta Edición (por @kuromi04)
+- 📖 **Nueva Documentación Visual:** Lee nuestra [Guía para principiantes: Cómo funciona la Magia P2P](docs/HOW_IT_WORKS.md).
 - 🚀 **Servidor Coordinador P2P (`hivebear-coordinator`):** Servidor HTTP ultraligero en Rust con Docker para señalización, STUN hole-punching y emparejamiento de nodos global.
 - 🛡️ **Seguridad Mejorada:** Prevención de ataques DoS y fugas de memoria con buffers acotados (máximo 50 mensajes en cola por nodo) y purga automática de nodos inactivos.
 - 📱 **Integración Móvil Android ([TermuxHiveBear](https://github.com/kuromi04/TermuxHiveBear)):** Conecta cualquier smartphone Android a la red distribuida de IA.
