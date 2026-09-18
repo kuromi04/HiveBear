@@ -2541,6 +2541,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "hivebear-coordinator"
+version = "0.1.5"
+dependencies = [
+ "axum",
+ "chrono",
+ "clap",
+ "dashmap",
+ "hivebear-core",
+ "hivebear-mesh",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "hivebear-core"
 version = "0.1.5"
 dependencies = [

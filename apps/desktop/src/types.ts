@@ -84,6 +84,8 @@ export interface Config {
   cloud_api_keys?: Record<string, string>;
   cloud_fallback?: boolean;
   cloud_default_provider?: string;
+  mesh?: any;
+  cloud?: any;
 }
 
 /** Static definition of a supported cloud provider. */

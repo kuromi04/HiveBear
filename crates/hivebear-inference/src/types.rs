@@ -121,7 +121,7 @@ mod base64_bytes {
 }
 
 /// A message in a chat conversation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "role", content = "content")]
 pub enum ChatMessage {
     #[serde(rename = "system")]
@@ -139,6 +139,78 @@ pub enum ChatMessage {
         tool_call_id: String,
         content: String,
     },
+}
+
+impl<'de> Deserialize<'de> for ChatMessage {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct RawMessage {
+            role: String,
+            content: Option<serde_json::Value>,
+        }
+
+        let raw = RawMessage::deserialize(deserializer)?;
+        match raw.role.as_str() {
+            "system" => {
+                let text = match raw.content {
+                    Some(serde_json::Value::String(s)) => s,
+                    Some(val) => val.to_string(),
+                    None => String::new(),
+                };
+                Ok(ChatMessage::System(text))
+            }
+            "user" => {
+                let parts = match raw.content {
+                    Some(val) => serde_json::from_value(val).map_err(serde::de::Error::custom)?,
+                    None => vec![],
+                };
+                Ok(ChatMessage::User(parts))
+            }
+            "assistant" => {
+                match raw.content {
+                    Some(serde_json::Value::String(s)) => Ok(ChatMessage::Assistant {
+                        content: Some(s),
+                        tool_calls: vec![],
+                    }),
+                    Some(serde_json::Value::Object(obj)) => {
+                        let content = obj.get("content").and_then(|v| v.as_str()).map(String::from);
+                        let tool_calls = if let Some(tc) = obj.get("tool_calls") {
+                            serde_json::from_value(tc.clone()).map_err(serde::de::Error::custom)?
+                        } else {
+                            vec![]
+                        };
+                        Ok(ChatMessage::Assistant { content, tool_calls })
+                    }
+                    Some(serde_json::Value::Null) | None => Ok(ChatMessage::Assistant {
+                        content: None,
+                        tool_calls: vec![],
+                    }),
+                    _ => Err(serde::de::Error::custom("invalid assistant content")),
+                }
+            }
+            "tool" => {
+                let obj = match raw.content {
+                    Some(serde_json::Value::Object(map)) => map,
+                    _ => return Err(serde::de::Error::custom("expected object for tool content")),
+                };
+                let tool_call_id = obj
+                    .get("tool_call_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| serde::de::Error::custom("missing tool_call_id"))?
+                    .to_string();
+                let content = obj
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                Ok(ChatMessage::ToolResult { tool_call_id, content })
+            }
+            _ => Err(serde::de::Error::custom(format!("unknown role: {}", raw.role))),
+        }
+    }
 }
 
 impl ChatMessage {

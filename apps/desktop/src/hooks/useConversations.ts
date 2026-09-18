@@ -11,19 +11,34 @@ import {
 
 export function useConversations() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveIdState] = useState<string | null>(() => localStorage.getItem('hivebear_active_conv_id'));
   const [loading, setLoading] = useState(true);
+
+  const setActiveId = useCallback((id: string | null) => {
+    setActiveIdState(id);
+    if (id) {
+      localStorage.setItem('hivebear_active_conv_id', id);
+    } else {
+      localStorage.removeItem('hivebear_active_conv_id');
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
       const convs = await listConversations();
       setConversations(convs);
+      const storedId = localStorage.getItem('hivebear_active_conv_id');
+      if (storedId && convs.some(c => c.id === storedId)) {
+        setActiveIdState(storedId);
+      } else if (convs.length > 0) {
+        setActiveId(convs[0].id);
+      }
     } catch (e) {
       console.error('Failed to list conversations:', e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setActiveId]);
 
   useEffect(() => { refresh(); }, [refresh]);
 

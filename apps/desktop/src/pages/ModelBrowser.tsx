@@ -7,12 +7,17 @@ import { Search as SearchIcon, Package } from "lucide-react";
 
 export default function ModelBrowser() {
   const [query, setQuery] = useState("");
-  const { results, loading: searching, search } = useModelSearch();
+  const { results, loading: searching, error: searchError, search } = useModelSearch();
   const { models: installed, refresh } = useInstalledModels();
   const { installing, progress, error: installError, install } = useModelInstall();
   const { removing, remove } = useModelRemove();
   const [tab, setTab] = useState<"search" | "installed">("search");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Load top models on initial mount
+  useEffect(() => {
+    search("");
+  }, [search]);
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +86,12 @@ export default function ModelBrowser() {
         {installing && (
           <div className="shrink-0 px-6 pt-4">
             <DownloadProgress modelId={installing} progress={progress} />
+          </div>
+        )}
+
+        {searchError && (
+          <div className="mx-6 mt-4 rounded-[var(--radius-md)] border border-danger/30 bg-danger/10 px-4 py-2 text-sm text-danger">
+            {searchError}
           </div>
         )}
 

@@ -9,11 +9,11 @@ export function useModelSearch() {
   const [error, setError] = useState<string | null>(null);
 
   const search = useCallback(async (query: string) => {
-    if (!query.trim()) { setResults([]); return; }
     setLoading(true);
     setError(null);
     try {
-      const r = await searchModels(query, 20);
+      const q = query.trim();
+      const r = await searchModels(q, 20);
       setResults(r);
     } catch (e) {
       setError(String(e));

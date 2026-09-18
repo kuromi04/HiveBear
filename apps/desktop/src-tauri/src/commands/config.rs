@@ -15,6 +15,11 @@ pub fn get_config(state: State<'_, AppState>) -> CmdResult<Config> {
 #[tauri::command]
 pub fn save_config(state: State<'_, AppState>, new_config: Config) -> CmdResult<()> {
     validate_config(&new_config)?;
+    if let Some(token) = new_config.cloud.api_keys.get("huggingface") {
+        if !token.is_empty() {
+            std::env::set_var("HF_TOKEN", token);
+        }
+    }
     let mut config = state
         .config
         .lock()

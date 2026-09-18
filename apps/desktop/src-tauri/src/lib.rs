@@ -33,15 +33,12 @@ pub fn run() {
             } else {
                 AppState::init()
             };
-            // Auto-start mesh if enabled and auto_join is configured
+            // Sync HF_TOKEN env var from stored config
             {
-                let should_start = {
-                    let config = app_state.config.lock().unwrap_or_else(|e| e.into_inner());
-                    config.mesh.enabled && config.mesh.auto_join
-                };
-                if should_start {
-                    if let Err(e) = app_state.start_mesh() {
-                        warn!("Failed to auto-start mesh (non-fatal): {e}");
+                let config = app_state.config.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(token) = config.cloud.api_keys.get("huggingface") {
+                    if !token.is_empty() {
+                        std::env::set_var("HF_TOKEN", token);
                     }
                 }
             }

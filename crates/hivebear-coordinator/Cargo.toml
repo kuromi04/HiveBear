@@ -1,0 +1,24 @@
+[package]
+name = "hivebear-coordinator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lightweight P2P Coordination and Signaling Server for HiveBear"
+
+[[bin]]
+name = "hivebear-coordinator"
+path = "src/main.rs"
+
+[dependencies]
+hivebear-core = { path = "../hivebear-core" }
+hivebear-mesh = { path = "../hivebear-mesh" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net"] }
+axum = "0.8"
+tower-http = { version = "0.6", features = ["cors"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dashmap = "6"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }

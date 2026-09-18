@@ -83,6 +83,7 @@ pub const KNOWN_PROVIDERS: &[&str] = &[
     "fireworks",
     "deepseek",
     "xai",
+    "huggingface",
     "cohere",
     "perplexity",
     "openrouter",

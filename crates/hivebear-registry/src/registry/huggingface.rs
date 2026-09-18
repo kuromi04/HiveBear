@@ -13,16 +13,18 @@ pub struct HuggingFaceSource {
 /// HuggingFace API model response (subset of fields).
 #[derive(Debug, Deserialize)]
 struct HfModelResponse {
-    #[serde(rename = "modelId", alias = "id")]
-    model_id: String,
     #[serde(default)]
-    tags: Vec<String>,
+    id: Option<String>,
+    #[serde(rename = "modelId", default)]
+    model_id: Option<String>,
     #[serde(default)]
-    downloads: u64,
+    tags: Option<Vec<String>>,
     #[serde(default)]
-    likes: u64,
+    downloads: Option<u64>,
     #[serde(default)]
-    siblings: Vec<HfSibling>,
+    likes: Option<u64>,
+    #[serde(default)]
+    siblings: Option<Vec<HfSibling>>,
     #[serde(rename = "lastModified", default)]
     last_modified: Option<String>,
 }
@@ -145,6 +147,7 @@ impl HuggingFaceSource {
 
         let files: Vec<RemoteFile> = model
             .siblings
+            .unwrap_or_default()
             .into_iter()
             .filter(|s| s.filename.ends_with(".gguf"))
             .map(|s| {
@@ -169,18 +172,24 @@ impl HuggingFaceSource {
 
 /// Convert a HuggingFace API response into our ModelMetadata.
 fn hf_to_metadata(model: HfModelResponse) -> ModelMetadata {
-    let name = model
-        .model_id
+    let raw_id = model
+        .id
+        .or(model.model_id)
+        .unwrap_or_else(|| "unknown-model".to_string());
+
+    let name = raw_id
         .rsplit('/')
         .next()
-        .unwrap_or(&model.model_id)
+        .unwrap_or(&raw_id)
         .to_string();
+        
+    let tags = model.tags.clone().unwrap_or_default();
 
     // Try to extract param count from tags or name
-    let params = extract_param_count(&name, &model.tags);
+    let params = extract_param_count(&name, &tags);
 
     // Guess category from tags
-    let category = guess_category(&model.tags);
+    let category = guess_category(&tags);
 
     let last_modified = model
         .last_modified
@@ -196,15 +205,15 @@ fn hf_to_metadata(model: HfModelResponse) -> ModelMetadata {
         quality_score: 0.0,
         category,
         source: ModelSource::HuggingFace {
-            repo_id: model.model_id.clone(),
+            repo_id: raw_id.clone(),
             revision: None,
         },
-        huggingface_id: Some(model.model_id),
+        huggingface_id: Some(raw_id),
         installed: None,
         description: None,
-        tags: model.tags,
-        downloads_count: Some(model.downloads),
-        likes_count: Some(model.likes),
+        tags: model.tags.unwrap_or_default(),
+        downloads_count: model.downloads,
+        likes_count: model.likes,
         last_modified,
     }
 }

@@ -52,6 +52,11 @@ impl DownloadManager {
 
         for attempt in 0..=max_retries {
             let mut request = self.client.get(url);
+            if let Ok(token) = std::env::var("HF_TOKEN") {
+                if !token.is_empty() {
+                    request = request.header("Authorization", format!("Bearer {token}"));
+                }
+            }
             if bytes_downloaded > 0 {
                 request = request.header("Range", format!("bytes={bytes_downloaded}-"));
             }
@@ -124,9 +129,14 @@ impl DownloadManager {
         model_id: &str,
         progress_cb: Option<&(dyn Fn(DownloadProgress) + Send + Sync)>,
     ) -> Result<PathBuf> {
-        tokio::fs::create_dir_all(dest_dir).await?;
-
         let final_path = dest_dir.join(filename);
+        
+        if let Some(parent) = final_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        } else {
+            tokio::fs::create_dir_all(dest_dir).await?;
+        }
+
         let partial_path = dest_dir.join(format!("{filename}.partial"));
         let meta_path = dest_dir.join(format!("{filename}.partial.meta"));
 
@@ -167,51 +177,76 @@ impl DownloadManager {
         let meta_json = serde_json::to_string(&meta)?;
         tokio::fs::write(&meta_path, &meta_json).await?;
 
-        // Build request with Range header for resume, with retry on transient errors
-        let response = self.send_with_retry(url, bytes_downloaded, 3).await?;
+        // Start resilient download loop
+        let mut max_stream_retries = 5;
+        loop {
+            // Build request with Range header for resume, with retry on transient errors
+            let response = self.send_with_retry(url, bytes_downloaded, 3).await?;
 
-        let total_bytes = response.content_length().map(|cl| cl + bytes_downloaded);
+            let total_bytes = response.content_length().map(|cl| cl + bytes_downloaded);
 
-        // Open file for appending (resume) or creating
-        let mut file = tokio::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&partial_path)
-            .await?;
+            // Open file for appending (resume) or creating
+            let mut file = tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&partial_path)
+                .await?;
 
-        let mut stream = response.bytes_stream();
-        let start_time = std::time::Instant::now();
-        let bytes_at_start = bytes_downloaded;
+            let mut stream = response.bytes_stream();
+            let start_time = std::time::Instant::now();
+            let bytes_at_start = bytes_downloaded;
+            let mut stream_error = false;
 
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| RegistryError::DownloadError(e.to_string()))?;
-            file.write_all(&chunk).await?;
+            while let Some(chunk_res) = stream.next().await {
+                match chunk_res {
+                    Ok(chunk) => {
+                        file.write_all(&chunk).await?;
 
-            if expected_sha256.is_some() {
-                hasher.update(&chunk);
+                        if expected_sha256.is_some() {
+                            hasher.update(&chunk);
+                        }
+
+                        bytes_downloaded += chunk.len() as u64;
+
+                        if let Some(cb) = progress_cb {
+                            let elapsed = start_time.elapsed().as_secs_f64();
+                            // Calculate speed based on bytes downloaded in this session (not total)
+                            let session_bytes = bytes_downloaded - bytes_at_start;
+                            let bps = if elapsed > 0.0 {
+                                session_bytes as f64 / elapsed
+                            } else {
+                                0.0
+                            };
+                            cb(DownloadProgress {
+                                bytes_downloaded,
+                                total_bytes,
+                                bytes_per_sec: bps,
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Stream error during download: {e}. bytes_downloaded: {bytes_downloaded}");
+                        stream_error = true;
+                        break;
+                    }
+                }
             }
 
-            bytes_downloaded += chunk.len() as u64;
+            file.flush().await?;
+            drop(file);
 
-            if let Some(cb) = progress_cb {
-                let elapsed = start_time.elapsed().as_secs_f64();
-                // Calculate speed based on bytes downloaded in this session (not total)
-                let session_bytes = bytes_downloaded - bytes_at_start;
-                let bps = if elapsed > 0.0 {
-                    session_bytes as f64 / elapsed
-                } else {
-                    0.0
-                };
-                cb(DownloadProgress {
-                    bytes_downloaded,
-                    total_bytes,
-                    bytes_per_sec: bps,
-                });
+            if !stream_error {
+                break; // Download completed fully!
             }
+
+            max_stream_retries -= 1;
+            if max_stream_retries == 0 {
+                return Err(RegistryError::DownloadError("Max stream retries exceeded".to_string()));
+            }
+
+            // Wait a moment before resuming
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         }
-
-        file.flush().await?;
-        drop(file);
 
         // Verify SHA-256 if expected
         if let Some(expected) = expected_sha256 {

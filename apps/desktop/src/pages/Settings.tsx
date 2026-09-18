@@ -17,14 +17,49 @@ export default function Settings() {
   const [activeSection, setActiveSection] = useState<SectionId>("Inference");
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
-  useEffect(() => { if (config) setForm({ ...config }); }, [config]);
+  useEffect(() => {
+    if (config) {
+      setForm({
+        ...config,
+        mesh_enabled: config.mesh?.enabled ?? (config as any).mesh_enabled ?? false,
+        mesh_port: config.mesh?.port ?? (config as any).mesh_port ?? 7878,
+        mesh_coordination_server: config.mesh?.coordination_server ?? (config as any).mesh_coordination_server ?? "",
+        mesh_max_contribution: config.mesh?.max_contribution_percent ?? (config as any).mesh_max_contribution ?? 0.8,
+        mesh_verification_rate: config.mesh?.verification_rate ?? (config as any).mesh_verification_rate ?? 0.05,
+        cloud_api_keys: config.cloud?.api_keys ?? (config as any).cloud_api_keys ?? {},
+        cloud_fallback: config.cloud?.cloud_fallback ?? (config as any).cloud_fallback ?? false,
+        cloud_default_provider: config.cloud?.default_provider ?? (config as any).cloud_default_provider,
+      });
+    }
+  }, [config]);
 
   const isDirty = useMemo(() => {
     if (!config || !form) return false;
     return JSON.stringify(config) !== JSON.stringify(form);
   }, [config, form]);
 
-  const handleSave = useCallback(() => { if (form) save(form); }, [form, save]);
+  const handleSave = useCallback(() => {
+    if (form) {
+      const updated: Config = {
+        ...form,
+        mesh: {
+          ...((form as any).mesh || {}),
+          enabled: form.mesh_enabled ?? false,
+          port: form.mesh_port ?? 7878,
+          coordination_server: form.mesh_coordination_server ?? "",
+          max_contribution_percent: form.mesh_max_contribution ?? 0.8,
+          verification_rate: form.mesh_verification_rate ?? 0.05,
+        },
+        cloud: {
+          ...((form as any).cloud || {}),
+          api_keys: form.cloud_api_keys ?? {},
+          cloud_fallback: form.cloud_fallback ?? false,
+          default_provider: form.cloud_default_provider,
+        },
+      };
+      save(updated);
+    }
+  }, [form, save]);
   const handleDiscard = useCallback(() => { if (config) setForm({ ...config }); }, [config]);
 
   const scrollToSection = useCallback((id: SectionId) => {

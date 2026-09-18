@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  coordinator:
+    build:
+      context: ../..
+      dockerfile: crates/hivebear-coordinator/Dockerfile
+    container_name: hivebear-coordinator
+    ports:
+      - "7879:7879"
+    restart: always
+    environment:
+      - RUST_LOG=hivebear_coordinator=info,info

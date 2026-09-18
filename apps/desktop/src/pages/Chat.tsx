@@ -50,18 +50,21 @@ export default function Chat() {
       clear();
       return;
     }
-    (async () => {
-      try {
-        const persisted = await getMessages(activeId);
-        const displayMsgs: DisplayMessage[] = persisted.map((m) => ({
-          role: m.role === "User" ? "user" : m.role === "Assistant" ? "assistant" : "system",
-          content: m.content,
-        }));
-        setMessages(displayMsgs);
-      } catch (e) {
-        console.error("Failed to load messages:", e);
-      }
-    })();
+      (async () => {
+        try {
+          const persisted = await getMessages(activeId);
+          const displayMsgs: DisplayMessage[] = persisted.map((m) => {
+            const roleStr = String(m.role).toLowerCase();
+            return {
+              role: roleStr === "user" ? "user" : roleStr === "assistant" ? "assistant" : "system",
+              content: m.content,
+            };
+          });
+          setMessages(displayMsgs);
+        } catch (e) {
+          console.error("Failed to load messages:", e);
+        }
+      })();
   }, [activeId, getMessages, clear, setMessages]);
 
   const handleSend = useCallback(async (text?: string) => {
