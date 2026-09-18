@@ -3,9 +3,18 @@
 </p>
 
 <p align="center">
-  <strong>The world's largest peer-to-peer AI mesh network & local runtime.</strong><br>
-  <em>La red mesh P2P y entorno de ejecución local de IA más grande del mundo.</em><br>
-  Every device is a node — from High-End GPUs to Laptops and Android devices with Termux.<br>
+  <em>
+    <strong>Welcome to the Den.</strong> HiveBear is built by people who think AI should be for everyone - not just people with deep pockets and top-shelf hardware. Share your spare compute, contribute code, help someone get started, or just hang out. The pack looks after its own.
+  </em>
+</p>
+
+<p align="center">
+  <em>
+    <strong>Bienvenido a la Guarida.</strong> HiveBear está construido por personas que creen que la IA debería ser para todos, no solo para quienes tienen hardware de gama alta. Comparte tu poder de cómputo libre, contribuye con código, ayuda a alguien a empezar, o simplemente pasa el rato. La manada cuida de los suyos.
+  </em>
+</p>
+
+<p align="center">
   <em>Patched, Enhanced & Maintained by <a href="https://github.com/kuromi04">@kuromi04</a></em>
 </p>
 

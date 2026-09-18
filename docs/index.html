@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HiveBear - Decentralized AI Mesh</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0a0a0f;
+            --text-color: #e0e0e0;
+            --cyan: #00ffff;
+            --magenta: #ff00ff;
+            --dark-panel: #111116;
+            --border: #222;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        header {
+            text-align: center;
+            padding: 4rem 1rem;
+            background: radial-gradient(circle at top, #1a1a2e, #0a0a0f);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .banner {
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            display: block;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.1);
+        }
+
+        .philosophy {
+            max-width: 700px;
+            margin: 3rem auto;
+            padding: 2rem;
+            background: var(--dark-panel);
+            border-left: 4px solid var(--cyan);
+            border-radius: 0 8px 8px 0;
+            font-style: italic;
+            font-size: 1.1rem;
+            color: #ccc;
+        }
+
+        .philosophy strong {
+            color: var(--cyan);
+            font-weight: 800;
+        }
+
+        .philosophy-es {
+            border-left-color: var(--magenta);
+        }
+
+        .philosophy-es strong {
+            color: var(--magenta);
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        h2 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            background: -webkit-linear-gradient(45deg, var(--cyan), var(--magenta));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 3rem 0;
+        }
+
+        .btn {
+            background: transparent;
+            color: var(--text-color);
+            text-decoration: none;
+            padding: 1rem 2rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .btn-github {
+            border-color: #fff;
+            color: #fff;
+        }
+
+        .btn-termux {
+            border-color: #4CAF50;
+            color: #4CAF50;
+        }
+
+        .btn-discord {
+            border-color: #5865F2;
+            color: #5865F2;
+        }
+
+        .code-block {
+            background: #000;
+            padding: 1.5rem;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+            color: #4CAF50;
+        }
+
+        footer {
+            text-align: center;
+            padding: 3rem 1rem;
+            border-top: 1px solid var(--border);
+            margin-top: 4rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        footer a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <img src="../assets/banner.png" alt="HiveBear Banner" class="banner">
+    </header>
+
+    <div class="container">
+        
+        <div class="philosophy">
+            <p><strong>Welcome to the Den.</strong> HiveBear is built by people who think AI should be for everyone - not just people with deep pockets and top-shelf hardware. Share your spare compute, contribute code, help someone get started, or just hang out. The pack looks after its own.</p>
+        </div>
+
+        <div class="philosophy philosophy-es">
+            <p><strong>Bienvenido a la Guarida.</strong> HiveBear está construido por personas que creen que la IA debería ser para todos, no solo para quienes tienen hardware de gama alta. Comparte tu poder de cómputo libre, contribuye con código, ayuda a alguien a empezar, o simplemente pasa el rato. La manada cuida de los suyos.</p>
+        </div>
+
+        <div class="buttons">
+            <a href="https://github.com/kuromi04/HiveBear" class="btn btn-github">⭐ View on GitHub</a>
+            <a href="https://github.com/kuromi04/TermuxHiveBear" class="btn btn-termux">📱 Termux Node</a>
+            <a href="HOW_IT_WORKS.md" class="btn">🧠 How It Works (Docs)</a>
+        </div>
+
+        <h2>Universal Setup (Linux/macOS/Android)</h2>
+        <div class="code-block">
+curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash
+        </div>
+
+        <h2 style="margin-top: 4rem;">Windows PowerShell Setup</h2>
+        <div class="code-block" style="color: #00ffff;">
+irm https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.ps1 | iex
+        </div>
+
+    </div>
+
+    <footer>
+        <p>Patched, Enhanced & Maintained by <a href="https://github.com/kuromi04">@kuromi04</a></p>
+        <p>MIT License - The HiveBear Open Source Project</p>
+    </footer>
+
+</body>
+</html>
