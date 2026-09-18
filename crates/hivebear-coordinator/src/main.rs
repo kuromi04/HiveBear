@@ -109,7 +109,7 @@ async fn health_check() -> Json<serde_json::Value> {
     Json(json!({
         "status": "ok",
         "service": "hivebear-coordinator",
-        "version": "0.1.5",
+        "version": "0.2.0",
         "patched_by": "@kuromi04",
     }))
 }

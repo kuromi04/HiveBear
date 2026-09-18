@@ -1,8 +1,10 @@
 {
-  "name": "hivebear-desktop",
+  "name": "hivebear",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.2.0",
   "type": "module",
+  "description": "The world's largest peer-to-peer AI mesh network.",
+  "author": "kuromi04",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

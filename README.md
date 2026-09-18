@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="assets/logo-readme.png" alt="HiveBear" width="120" />
+  <img src="assets/banner.svg" alt="HiveBear Banner" width="100%" />
 </p>
-
-<h1 align="center">HiveBear (Patched Edition)</h1>
 
 <p align="center">
   <strong>The world's largest peer-to-peer AI mesh network & local runtime.</strong><br>
@@ -13,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/kuromi04/TermuxHiveBear"><img src="https://img.shields.io/badge/Termux-Supported-brightgreen?logo=android" alt="Termux Support" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
-  <img src="https://img.shields.io/badge/version-0.1.5--patched-orange.svg" alt="Version 0.1.5" />
+  <img src="https://img.shields.io/badge/version-0.2.0--patched-orange.svg" alt="Version 0.2.0" />
 </p>
 
 ---
