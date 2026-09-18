@@ -1,9 +1,10 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="HiveBear Banner" width="800" />
+  <img src="assets/banner.png" alt="HiveBear Banner" width="100%" />
 </p>
 
 <p align="center">
   <strong>The world's largest peer-to-peer AI mesh network & local runtime.</strong><br>
+  <em>La red mesh P2P y entorno de ejecución local de IA más grande del mundo.</em><br>
   Every device is a node — from High-End GPUs to Laptops and Android devices with Termux.<br>
   <em>Patched, Enhanced & Maintained by <a href="https://github.com/kuromi04">@kuromi04</a></em>
 </p>
@@ -14,19 +15,26 @@
   <img src="https://img.shields.io/badge/version-0.2.0--patched-orange.svg" alt="Version 0.2.0" />
 </p>
 
+<p align="center">
+  <a href="#english">🇬🇧 English</a> | <a href="#español">🇪🇸 Español</a>
+</p>
+
 ---
 
-## 🛠️ Patches & Improvements in this Edition (by @kuromi04)
+<a name="english"></a>
+## 🇬🇧 English Documentation
 
-- 🚀 **hivebear-coordinator (P2P Signaling Server):** Added a dedicated, lightweight Rust HTTP server (`crates/hivebear-coordinator`) with Docker support to coordinate P2P mesh discovery, STUN hole-punching, and swarm matchmaking worldwide.
+### 🛠️ Patches & Improvements in this Edition (by @kuromi04)
+- 🚀 **hivebear-coordinator (P2P Signaling Server):** Dedicated, lightweight Rust HTTP server with Docker support to coordinate P2P mesh discovery, STUN hole-punching, and swarm matchmaking worldwide.
+- 🛡️ **Cybersecurity Hardened:** Mitigated Denial-of-Service (DoS) and memory leak risks by bounding signal buffers (max 50 queue per peer) and cleaning inactive state.
 - 📱 **Termux & Mobile Integration ([TermuxHiveBear](https://github.com/kuromi04/TermuxHiveBear)):** Seamlessly connect Android smartphones running Termux to your desktop AI mesh network.
 - 📥 **HF Nested Path Download Fix:** Resolved `OS error 3` path errors when downloading HuggingFace models with subdirectories (`Q4_K_M/model.gguf`).
-- ⚡ **Resilient Stream Downloads:** Added automatic reconnect and chunk resume logic when HuggingFace or remote servers drop TCP streams.
-- 💬 **Chat Persistence & Deserialization Fix:** Conversations persist across app restarts and tab navigation. Fixed `stream_chat` JSON deserialization for text-only assistant responses.
+- ⚡ **Resilient Stream Downloads:** Added automatic reconnect and chunk resume logic with HTTP `Range` headers.
+- 💬 **Chat Persistence:** Conversations persist across app restarts and tab navigation with SQLite.
 
 ---
 
-## 🌐 P2P Mesh Architecture (Desktop + Mobile Termux)
+### 🌐 Architecture
 
 ```
                                ┌─────────────────────────────────────────┐
@@ -45,79 +53,66 @@
 
 ---
 
-## 🚀 Running the HiveBear Coordinator Server (Docker / VPS)
+### ⚡ 1-Line Universal Dependency Installer
 
-To host your own P2P discovery & signaling server so devices anywhere in the world can pair automatically:
+Before building, install all required dependencies automatically:
 
-### Using Docker Compose:
-
-```bash
-git clone https://github.com/kuromi04/HiveBear.git
-cd HiveBear
-docker compose -f crates/hivebear-coordinator/docker-compose.yml up -d
-```
-
-### Or using Cargo directly:
-
-```bash
-cargo run -p hivebear-coordinator --release -- --port 7879 --bind 0.0.0.0
-```
-
-Verify your server is active by visiting: `http://YOUR-SERVER-IP:7879/health`
+- **Linux / Android (Termux) / macOS:**
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash
+  ```
+- **Windows (PowerShell as Administrator):**
+  ```powershell
+  irm https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.ps1 | iex
+  ```
 
 ---
 
-## 📱 Connecting Android Devices via Termux (TermuxHiveBear)
+### 🖥️ Platform-Specific Setup Guide
 
-1. Open Termux on Android and clone the Termux repo:
+#### 📱 Android (Termux)
+> ⚠️ **IMPORTANT:** Never install Termux from Google Play or F-Droid! Always use the official releases from the [official Termux GitHub repository](https://github.com/termux/termux-app/releases).
+
+1. Download and install the latest APK (`termux-app_..._universal.apk`) from [termux-app releases](https://github.com/termux/termux-app/releases).
+2. Open Termux and run the auto-installer:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash
+   ```
+3. Clone and run [TermuxHiveBear](https://github.com/kuromi04/TermuxHiveBear):
    ```bash
    git clone https://github.com/kuromi04/TermuxHiveBear.git
    cd TermuxHiveBear
+   cargo build --release
+   ./target/release/hivebear contribute --coordinator http://YOUR-VPS-IP:7879 --port 7878
    ```
-2. Connect to your Desktop PC or Coordinator Server:
+
+#### 🐧 Linux (Ubuntu / Debian / Fedora / Arch)
+1. Install dependencies:
    ```bash
-   hivebear contribute --coordinator http://YOUR-SERVER-IP:7879 --port 7878
+   curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash
    ```
-
----
-
-## 🖥️ Installation & Setup Guide
-
-HiveBear runs seamlessly across various platforms, automatically forming a P2P mesh network.
-
-### 🐧 Linux (Ubuntu / Debian / Arch)
-**Requirements:** `curl`, `build-essential`, `libwebkit2gtk-4.0-dev` (or `4.1`)
-1. Install system dependencies:
-   ```bash
-   sudo apt update
-   sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-   ```
-2. Download the AppImage or build from source:
+2. Build Desktop application:
    ```bash
    git clone https://github.com/kuromi04/HiveBear.git
    cd HiveBear/apps/desktop
    npm install
    npx @tauri-apps/cli build
    ```
-3. Run the generated `.AppImage` or `.deb` in `target/release/bundle/`.
+3. AppImage/deb will be in `target/release/bundle/`.
 
-### 🪟 Windows (10 / 11)
-**Requirements:** Node.js (18+), Rust (1.80+), Visual Studio C++ Build Tools.
-1. Open PowerShell / Command Prompt and clone the repo:
-   ```cmd
+#### 🪟 Windows (10 / 11)
+1. In PowerShell:
+   ```powershell
    git clone https://github.com/kuromi04/HiveBear.git
-   cd HiveBear/apps/desktop
+   cd HiveBear\apps\desktop
    npm install
-   ```
-2. Build the desktop installer:
-   ```cmd
    npx @tauri-apps/cli build
    ```
-3. Run the generated installer: `target/release/bundle/nsis/HiveBear_0.2.0_x64-setup.exe`
+2. The setup installer will be generated at:
+   `target/release/bundle/nsis/HiveBear_0.2.0_x64-setup.exe`
 
-### 🍏 macOS (Apple Silicon M1/M2/M3 & Intel)
-**Requirements:** Xcode Command Line Tools.
-1. Install dependencies and build:
+#### 🍏 macOS (Apple Silicon M1/M2/M3/M4 & Intel)
+1. Install dependencies & build:
    ```bash
    xcode-select --install
    git clone https://github.com/kuromi04/HiveBear.git
@@ -125,24 +120,92 @@ HiveBear runs seamlessly across various platforms, automatically forming a P2P m
    npm install
    npx @tauri-apps/cli build --target universal-apple-darwin
    ```
-2. Open the generated `.dmg` or `.app` in `target/release/bundle/macos/`.
 
-### 📱 Android (Termux)
-Turn your smartphone into an AI compute node!
-1. Install [Termux from F-Droid](https://f-droid.org/en/packages/com.termux/).
-2. Open Termux and run:
+---
+
+<a name="español"></a>
+## 🇪🇸 Documentación en Español
+
+### 🛠️ Mejoras y Parches de esta Edición (por @kuromi04)
+- 🚀 **Servidor Coordinador P2P (`hivebear-coordinator`):** Servidor HTTP ultraligero en Rust con Docker para señalización, STUN hole-punching y emparejamiento de nodos global.
+- 🛡️ **Seguridad Mejorada:** Prevención de ataques DoS y fugas de memoria con buffers acotados (máximo 50 mensajes en cola por nodo) y purga automática de nodos inactivos.
+- 📱 **Integración Móvil Android ([TermuxHiveBear](https://github.com/kuromi04/TermuxHiveBear)):** Conecta cualquier smartphone Android a la red distribuida de IA.
+- 📥 **Corrección de Rutas Anidadas HF:** Solución al error `OS error 3` al descargar modelos de HuggingFace en subdirectorios.
+- ⚡ **Descargas Reanudables:** Reconexión y reanudación automática si se corta el enlace con el servidor de descarga mediante encabezados HTTP `Range`.
+- 💬 **Persistencia de Chat:** Conversaciones guardadas automáticamente con SQLite local.
+
+---
+
+### ⚡ Instalador de Dependencias en 1 Sola Línea
+
+Instala todos los requisitos previos automáticamente según tu sistema:
+
+- **Linux / Android (Termux) / macOS:**
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash
+  ```
+- **Windows (PowerShell como Administrador):**
+  ```powershell
+  irm https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.ps1 | iex
+  ```
+
+---
+
+### 🖥️ Guía de Instalación por Dispositivo
+
+#### 📱 Android (Termux)
+> ⚠️ **IMPORTANTE:** Nunca descargues Termux de Google Play (desactualizado) ni de F-Droid si buscas la versión más reciente y compatible. Descárgalo directamente desde el [Repositorio Oficial de Termux en GitHub](https://github.com/termux/termux-app/releases).
+
+1. Descarga e instala el APK (`termux-app_..._universal.apk`) desde [Releases Oficiales de Termux](https://github.com/termux/termux-app/releases).
+2. Abre Termux y ejecuta el instalador automático:
    ```bash
-   pkg update && pkg upgrade
-   pkg install git rust nodejs build-essential
+   curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash
+   ```
+3. Clona y ejecuta [TermuxHiveBear](https://github.com/kuromi04/TermuxHiveBear):
+   ```bash
    git clone https://github.com/kuromi04/TermuxHiveBear.git
    cd TermuxHiveBear
    cargo build --release
+   ./target/release/hivebear contribute --coordinator http://TU-IP-VPS:7879 --port 7878
    ```
-3. Connect to the mesh:
+
+#### 🐧 Linux (Ubuntu, Debian, Fedora, Arch)
+1. Instala las dependencias del sistema:
    ```bash
-   ./target/release/hivebear contribute --coordinator http://YOUR-VPS-IP:7879 --port 7878
+   curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash
+   ```
+2. Compila la aplicación:
+   ```bash
+   git clone https://github.com/kuromi04/HiveBear.git
+   cd HiveBear/apps/desktop
+   npm install
+   npx @tauri-apps/cli build
+   ```
+3. El archivo `.AppImage` o `.deb` se creará en `target/release/bundle/`.
+
+#### 🪟 Windows (10 / 11)
+1. Abre PowerShell o CMD:
+   ```powershell
+   git clone https://github.com/kuromi04/HiveBear.git
+   cd HiveBear\apps\desktop
+   npm install
+   npx @tauri-apps/cli build
+   ```
+2. El instalador ejecutable estará listo en:
+   `target/release/bundle/nsis/HiveBear_0.2.0_x64-setup.exe`
+
+#### 🍏 macOS (Apple Silicon M1/M2/M3/M4 & Intel)
+1. Instala herramientas de compilación y empaqueta:
+   ```bash
+   xcode-select --install
+   git clone https://github.com/kuromi04/HiveBear.git
+   cd HiveBear/apps/desktop
+   npm install
+   npx @tauri-apps/cli build --target universal-apple-darwin
    ```
 
-## 📄 License
+---
 
-MIT License. Designed by Deepmind / BeckhamLabs, enhanced & maintained by [@kuromi04](https://github.com/kuromi04).
+## 📄 License / Licencia
+
+MIT License. Enhanced, patched and maintained by [@kuromi04](https://github.com/kuromi04).
