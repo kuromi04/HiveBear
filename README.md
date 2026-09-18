@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="HiveBear Banner" width="100%" />
+  <img src="assets/banner.svg" alt="HiveBear Banner" width="800" />
 </p>
 
 <p align="center">
@@ -81,30 +81,67 @@ Verify your server is active by visiting: `http://YOUR-SERVER-IP:7879/health`
 
 ---
 
-## 🖥️ Building Desktop App from Source (Windows / Mac / Linux)
+## 🖥️ Installation & Setup Guide
 
-### Prerequisites:
-- Node.js 18+ and Rust (1.80+)
-- LLVM / MSVC (on Windows)
+HiveBear runs seamlessly across various platforms, automatically forming a P2P mesh network.
 
-### Build Steps:
+### 🐧 Linux (Ubuntu / Debian / Arch)
+**Requirements:** `curl`, `build-essential`, `libwebkit2gtk-4.0-dev` (or `4.1`)
+1. Install system dependencies:
+   ```bash
+   sudo apt update
+   sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+   ```
+2. Download the AppImage or build from source:
+   ```bash
+   git clone https://github.com/kuromi04/HiveBear.git
+   cd HiveBear/apps/desktop
+   npm install
+   npx @tauri-apps/cli build
+   ```
+3. Run the generated `.AppImage` or `.deb` in `target/release/bundle/`.
 
-```bash
-# Clone the repository
-git clone https://github.com/kuromi04/HiveBear.git
-cd HiveBear/apps/desktop
+### 🪟 Windows (10 / 11)
+**Requirements:** Node.js (18+), Rust (1.80+), Visual Studio C++ Build Tools.
+1. Open PowerShell / Command Prompt and clone the repo:
+   ```cmd
+   git clone https://github.com/kuromi04/HiveBear.git
+   cd HiveBear/apps/desktop
+   npm install
+   ```
+2. Build the desktop installer:
+   ```cmd
+   npx @tauri-apps/cli build
+   ```
+3. Run the generated installer: `target/release/bundle/nsis/HiveBear_0.2.0_x64-setup.exe`
 
-# Install node dependencies
-cmd.exe /c "npm install"
+### 🍏 macOS (Apple Silicon M1/M2/M3 & Intel)
+**Requirements:** Xcode Command Line Tools.
+1. Install dependencies and build:
+   ```bash
+   xcode-select --install
+   git clone https://github.com/kuromi04/HiveBear.git
+   cd HiveBear/apps/desktop
+   npm install
+   npx @tauri-apps/cli build --target universal-apple-darwin
+   ```
+2. Open the generated `.dmg` or `.app` in `target/release/bundle/macos/`.
 
-# Build desktop installer (NSIS / MSI)
-cmd.exe /c "npx @tauri-apps/cli build"
-```
-
-The output installer will be saved at:
-`target/release/bundle/nsis/HiveBear_0.1.5_x64-setup.exe`
-
----
+### 📱 Android (Termux)
+Turn your smartphone into an AI compute node!
+1. Install [Termux from F-Droid](https://f-droid.org/en/packages/com.termux/).
+2. Open Termux and run:
+   ```bash
+   pkg update && pkg upgrade
+   pkg install git rust nodejs build-essential
+   git clone https://github.com/kuromi04/TermuxHiveBear.git
+   cd TermuxHiveBear
+   cargo build --release
+   ```
+3. Connect to the mesh:
+   ```bash
+   ./target/release/hivebear contribute --coordinator http://YOUR-VPS-IP:7879 --port 7878
+   ```
 
 ## 📄 License
 

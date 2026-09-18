@@ -70,6 +70,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let active = now.duration_since(entry.last_seen) < Duration::from_secs(60);
                 if !active {
                     info!("Pruning inactive node: {}", id);
+                    // SECURITY FIX: Also clear their signals to prevent memory leak
+                    prune_state.signals.remove(id);
                 }
                 active
             });
@@ -214,8 +216,15 @@ async fn send_signal(
 ) -> StatusCode {
     let to_node = signal.to_node.clone();
     let val = serde_json::to_value(signal).unwrap();
-    state.signals.entry(to_node).or_default().push(val);
-    StatusCode::OK
+    
+    // SECURITY FIX: Cap the number of signals to prevent Memory Leak / DoS
+    let mut entry = state.signals.entry(to_node).or_default();
+    if entry.len() < 50 {
+        entry.push(val);
+        StatusCode::OK
+    } else {
+        StatusCode::TOO_MANY_REQUESTS
+    }
 }
 
 #[derive(Deserialize)]
