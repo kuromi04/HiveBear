@@ -26,14 +26,19 @@
 
         /* Hero / Banner Section */
         .hero {
-            position: relative;
             text-align: center;
-            padding: 8rem 1rem;
-            background-image: linear-gradient(to bottom, rgba(10, 10, 15, 0.6), rgba(10, 10, 15, 1)), url('https://raw.githubusercontent.com/kuromi04/HiveBear/main/assets/banner.png');
-            background-size: cover;
-            background-position: center;
+            padding: 4rem 1rem 2rem 1rem;
+            background: radial-gradient(circle at top, #1a1a2e, #0a0a0f);
             border-bottom: 1px solid var(--border);
-            box-shadow: 0 10px 40px rgba(0, 255, 255, 0.05);
+        }
+
+        .banner {
+            max-width: 850px;
+            width: 100%;
+            margin: 3rem auto 0 auto;
+            display: block;
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.15);
         }
 
         .hero-content {
@@ -175,6 +180,7 @@
                 <strong>The Decentralized Peer-to-Peer AI Mesh Network</strong><br>
                 <span style="color: var(--cyan); font-size: 1rem;">La red distribuida de Inteligencia Artificial para todos.</span>
             </p>
+            <img src="https://raw.githubusercontent.com/kuromi04/HiveBear/main/assets/banner.png" alt="HiveBear Banner" class="banner">
         </div>
     </header>
 
