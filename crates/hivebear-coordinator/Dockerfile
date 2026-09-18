@@ -1,5 +1,8 @@
 FROM rust:latest as builder
 
+# Install required tools for compiling C++ bindings (llama-cpp-sys-2/bindgen)
+RUN apt-get update && apt-get install -y clang libclang-dev cmake build-essential && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /usr/src/hivebear
 COPY . .
 
