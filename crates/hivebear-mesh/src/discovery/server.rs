@@ -359,4 +359,57 @@ impl CoordinationServerClient {
             Err(MeshError::Discovery("Not authenticated".into()))
         }
     }
+
+    /// GET /karma/balance?node_id=... — fetch current karma balance and tier.
+    pub async fn get_karma_balance(&self, node_id: &str) -> Result<i64> {
+        let url = format!("{}/karma/balance?node_id={}", self.base_url, node_id);
+        match self.http.get(&url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                let json: serde_json::Value = resp.json().await.map_err(|e| MeshError::Discovery(e.to_string()))?;
+                Ok(json.get("karma").and_then(|k| k.as_i64()).unwrap_or(0))
+            }
+            _ => Ok(0),
+        }
+    }
+
+    /// POST /karma/claim — submit a dual-verified work receipt to earn karma.
+    pub async fn claim_karma(
+        &self,
+        client_node_id: &str,
+        worker_node_id: &str,
+        tokens_processed: u64,
+        nonce: &str,
+        signature_hash: &str,
+    ) -> Result<i64> {
+        let url = format!("{}/karma/claim", self.base_url);
+        let body = serde_json::json!({
+            "receipt": {
+                "client_node_id": client_node_id,
+                "worker_node_id": worker_node_id,
+                "tokens_processed": tokens_processed,
+                "timestamp": std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                "nonce": nonce,
+                "signature_hash": signature_hash,
+            }
+        });
+
+        let resp = self
+            .http
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| MeshError::Discovery(format!("Claim karma network error: {e}")))?;
+
+        if resp.status().is_success() {
+            let json: serde_json::Value = resp.json().await.map_err(|e| MeshError::Discovery(e.to_string()))?;
+            Ok(json.get("new_balance").and_then(|b| b.as_i64()).unwrap_or(0))
+        } else {
+            let err_msg = resp.text().await.unwrap_or_default();
+            Err(MeshError::Discovery(format!("Claim karma rejected: {err_msg}")))
+        }
+    }
 }

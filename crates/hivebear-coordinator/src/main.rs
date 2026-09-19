@@ -40,6 +40,8 @@ struct NodeEntry {
 struct CoordinatorState {
     nodes: DashMap<String, NodeEntry>,
     signals: DashMap<String, Vec<serde_json::Value>>,
+    karma: DashMap<String, i64>,
+    processed_receipts: DashMap<String, Instant>,
 }
 
 type SharedState = Arc<CoordinatorState>;
@@ -57,6 +59,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(CoordinatorState {
         nodes: DashMap::new(),
         signals: DashMap::new(),
+        karma: DashMap::new(),
+        processed_receipts: DashMap::new(),
     });
 
     // Background task to prune stale nodes (no heartbeat for 60 seconds)
@@ -94,6 +98,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/signals", get(poll_signals))
         .route("/matchmake", post(matchmake))
         .route("/dashboard", get(dashboard))
+        .route("/karma/balance", get(get_karma_balance))
+        .route("/karma/claim", post(claim_karma))
         .layer(cors)
         .with_state(state);
 
@@ -256,11 +262,115 @@ async fn matchmake(
     Json(req): Json<MatchmakeRequest>,
 ) -> Json<serde_json::Value> {
     let available_peers = state.nodes.len();
+    let requester_karma = state.karma.get(&req.node_id).map(|k| *k).unwrap_or(0);
+    
+    // Sort peers: prioritizing high-karma contributors first
+    let mut ranked_peers: Vec<_> = state.nodes.iter().map(|entry| {
+        let p = &entry.value().info;
+        let id = p.node_id.to_hex();
+        let peer_karma = state.karma.get(&id).map(|k| *k).unwrap_or(0);
+        (id, p.addr.to_string(), peer_karma)
+    }).collect();
+
+    ranked_peers.sort_by(|a, b| b.2.cmp(&a.2));
+
+    let tier_status = if requester_karma >= 500 {
+        "VIP_ALPHA"
+    } else if requester_karma > 0 {
+        "CONTRIBUTOR"
+    } else {
+        "COMMUNITY"
+    };
+
     Json(json!({
         "swarm_id": format!("swarm-{}", req.preferred_model.unwrap_or_else(|| "default".to_string())),
         "assigned_role": "worker",
         "total_peers_in_swarm": available_peers,
+        "requester_karma": requester_karma,
+        "priority_tier": tier_status,
+        "ranked_peers": ranked_peers.into_iter().map(|(id, addr, karma)| json!({
+            "node_id": id,
+            "addr": addr,
+            "karma": karma
+        })).collect::<Vec<_>>()
     }))
+}
+
+#[derive(Deserialize)]
+struct KarmaBalanceQuery {
+    node_id: String,
+}
+
+async fn get_karma_balance(
+    State(state): State<SharedState>,
+    Query(query): Query<KarmaBalanceQuery>,
+) -> Json<serde_json::Value> {
+    let balance = state.karma.get(&query.node_id).map(|k| *k).unwrap_or(0);
+    Json(json!({
+        "node_id": query.node_id,
+        "karma": balance,
+        "tier": if balance >= 500 { "VIP_ALPHA" } else if balance > 0 { "CONTRIBUTOR" } else { "COMMUNITY" }
+    }))
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+struct WorkReceipt {
+    client_node_id: String,
+    worker_node_id: String,
+    tokens_processed: u64,
+    timestamp: u64,
+    nonce: String,
+    signature_hash: String,
+}
+
+#[derive(Deserialize)]
+struct ClaimKarmaRequest {
+    receipt: WorkReceipt,
+}
+
+async fn claim_karma(
+    State(state): State<SharedState>,
+    Json(req): Json<ClaimKarmaRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let r = &req.receipt;
+    
+    // 1. Anti-Replay verification
+    let receipt_key = format!("{}:{}:{}", r.client_node_id, r.nonce, r.timestamp);
+    if state.processed_receipts.contains_key(&receipt_key) {
+        return Err((StatusCode::CONFLICT, "Receipt already claimed (anti-replay check failed)".to_string()));
+    }
+
+    // 2. Client verification: check if client exists or has interacted recently
+    let client_known = state.nodes.contains_key(&r.client_node_id);
+    if !client_known && r.tokens_processed > 5000 {
+        return Err((StatusCode::FORBIDDEN, "Client node not recognized for high-token claims".to_string()));
+    }
+
+    // 3. Rate-limit / Cap per claim: prevent rogue node claiming millions in one shot
+    if r.tokens_processed == 0 || r.tokens_processed > 100_000 {
+        return Err((StatusCode::BAD_REQUEST, "Invalid token range in work receipt".to_string()));
+    }
+
+    // 4. Calculate Karma (1 token = 1 Karma point)
+    let points = r.tokens_processed as i64;
+    let mut current = state.karma.entry(r.worker_node_id.clone()).or_insert(0);
+    *current += points;
+    let new_balance = *current;
+
+    // Record receipt as processed
+    state.processed_receipts.insert(receipt_key, Instant::now());
+
+    info!(
+        "🐺 Karma awarded! Worker {} received +{} Karma from client {} (New Balance: {})",
+        r.worker_node_id, points, r.client_node_id, new_balance
+    );
+
+    Ok(Json(json!({
+        "status": "success",
+        "worker_node_id": r.worker_node_id,
+        "karma_awarded": points,
+        "new_balance": new_balance
+    })))
 }
 
 async fn dashboard(State(state): State<SharedState>) -> Json<serde_json::Value> {
@@ -271,14 +381,17 @@ async fn dashboard(State(state): State<SharedState>) -> Json<serde_json::Value> 
     let mut peer_list = Vec::new();
     for entry in state.nodes.iter() {
         let p = &entry.value().info;
+        let id = p.node_id.to_hex();
+        let k = state.karma.get(&id).map(|v| *v).unwrap_or(0);
         total_ram += p.available_memory_bytes;
         total_vram += p.available_vram_bytes;
         peer_list.push(json!({
-            "node_id": p.node_id.to_hex(),
+            "node_id": id,
             "addr": p.addr.to_string(),
             "tier": format!("{:?}", p.tier),
             "ram_bytes": p.available_memory_bytes,
             "vram_bytes": p.available_vram_bytes,
+            "karma": k
         }));
     }
 
@@ -289,3 +402,4 @@ async fn dashboard(State(state): State<SharedState>) -> Json<serde_json::Value> 
         "nodes": peer_list,
     }))
 }
+
