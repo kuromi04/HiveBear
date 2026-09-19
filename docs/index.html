@@ -1,18 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HiveBear - Decentralized AI Mesh</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <title>HiveBear - Decentralized P2P AI Mesh Network by @kuromi04</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #0a0a0f;
-            --text-color: #e0e0e0;
+            --bg-color: #08080c;
+            --text-color: #e4e4eb;
+            --text-muted: #9494a8;
             --cyan: #00ffff;
-            --magenta: #ff00ff;
-            --dark-panel: #111116;
-            --border: #222;
+            --cyan-glow: rgba(0, 255, 255, 0.4);
+            --magenta: #ff007f;
+            --magenta-glow: rgba(255, 0, 127, 0.4);
+            --dark-panel: #0e0e16;
+            --card-bg: #13131d;
+            --border: #242436;
+            --code-bg: #050508;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
@@ -22,105 +31,166 @@
             margin: 0;
             padding: 0;
             line-height: 1.6;
+            overflow-x: hidden;
         }
 
-        /* Hero / Banner Section */
-        .hero {
-            text-align: center;
-            padding: 4rem 1rem 2rem 1rem;
-            background: radial-gradient(circle at top, #1a1a2e, #0a0a0f);
-            border-bottom: 1px solid var(--border);
+        /* Ambient Glow Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100vw;
+            height: 100vh;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(0, 255, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 80% 30%, rgba(255, 0, 127, 0.04) 0%, transparent 40%);
+            pointer-events: none;
+            z-index: 0;
         }
 
-        .banner {
-            max-width: 850px;
+        /* Navbar */
+        .navbar {
+            position: sticky;
+            top: 0;
             width: 100%;
-            margin: 3rem auto 0 auto;
-            display: block;
-            border-radius: 12px;
-            box-shadow: 0 0 40px rgba(0, 255, 255, 0.15);
+            background: rgba(8, 8, 12, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
         }
 
-        .hero-content {
+        .nav-logo {
+            font-weight: 800;
+            font-size: 1.3rem;
+            color: #fff;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-logo span { color: var(--cyan); }
+        .nav-tag {
+            font-size: 0.75rem;
+            background: rgba(0, 255, 255, 0.1);
+            color: var(--cyan);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--cyan);
+        }
+
+        /* Hero */
+        .hero {
             position: relative;
-            z-index: 2;
+            text-align: center;
+            padding: 5rem 1.5rem 3rem 1.5rem;
+            z-index: 1;
+        }
+
+        .badge-live {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(0, 255, 255, 0.08);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            color: var(--cyan);
+            padding: 0.4rem 1rem;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 1.5rem;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff88;
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
         }
 
         .neon-title {
-            font-size: 5rem;
+            font-size: 4.5rem;
             margin: 0;
             font-weight: 800;
+            letter-spacing: -1px;
             color: #fff;
-            text-shadow:
-                0 0 5px #fff,
-                0 0 10px #fff,
-                0 0 20px var(--cyan),
-                0 0 40px var(--cyan),
-                0 0 80px var(--cyan);
-            letter-spacing: 2px;
-            text-transform: uppercase;
+            text-shadow: 0 0 20px var(--cyan-glow);
+            line-height: 1.1;
         }
 
         .neon-subtitle {
-            font-size: 1.5rem;
-            margin-top: 10px;
+            font-size: 1.4rem;
+            margin: 0.8rem 0;
             font-family: 'JetBrains Mono', monospace;
-            color: #fff;
-            animation: pulse 2s infinite alternate;
+            color: var(--magenta);
+            text-shadow: 0 0 15px var(--magenta-glow);
         }
 
-        @keyframes pulse {
-            0% { text-shadow: 0 0 5px var(--magenta), 0 0 10px var(--magenta); }
-            100% { text-shadow: 0 0 10px #fff, 0 0 20px var(--magenta), 0 0 40px var(--magenta); }
+        .hero-desc {
+            max-width: 680px;
+            margin: 1.2rem auto 2.5rem auto;
+            color: var(--text-muted);
+            font-size: 1.15rem;
         }
 
-        .hero-description {
-            font-size: 1.2rem;
-            color: #e0e0e0;
-            margin-top: 1.5rem;
-            font-weight: 300;
-            letter-spacing: 1px;
-            line-height: 1.6;
-            text-shadow: 0 2px 5px rgba(0,0,0,0.9);
+        .banner-container {
+            max-width: 860px;
+            margin: 0 auto;
+            border-radius: 16px;
+            padding: 4px;
+            background: linear-gradient(135deg, rgba(0,255,255,0.4), rgba(255,0,127,0.4));
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.6);
         }
 
-        @media (max-width: 600px) {
-            .neon-title { font-size: 3rem; }
-            .neon-subtitle { font-size: 1.2rem; }
+        .banner-container img {
+            width: 100%;
+            display: block;
+            border-radius: 14px;
         }
 
-        .philosophy {
-            max-width: 700px;
-            margin: 3rem auto;
-            padding: 2rem;
-            background: var(--dark-panel);
-            border-left: 4px solid var(--cyan);
-            border-radius: 0 8px 8px 0;
-            font-style: italic;
-            font-size: 1.1rem;
-            color: #ccc;
-        }
-
-        .philosophy strong { color: var(--cyan); font-weight: 800; }
-        .philosophy-es { border-left-color: var(--magenta); }
-        .philosophy-es strong { color: var(--magenta); }
-
+        /* Container */
         .container {
             max-width: 1000px;
             margin: 0 auto;
-            padding: 2rem 1rem;
+            padding: 3rem 1.5rem;
+            position: relative;
+            z-index: 1;
         }
 
-        h2 {
-            text-align: center;
-            font-size: 2rem;
-            margin-bottom: 2rem;
-            background: -webkit-linear-gradient(45deg, var(--cyan), var(--magenta));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .buttons {
+        /* CTA Buttons */
+        .cta-group {
             display: flex;
             justify-content: center;
             gap: 1rem;
@@ -129,136 +199,348 @@
         }
 
         .btn {
-            background: transparent;
-            color: var(--text-color);
-            text-decoration: none;
-            padding: 1rem 2rem;
-            border: 2px solid var(--border);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.9rem 1.8rem;
             border-radius: 8px;
             font-weight: 600;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            text-decoration: none;
+            transition: all 0.25s ease;
+            font-size: 0.95rem;
         }
 
-        .btn:hover {
+        .btn-primary {
+            background: var(--cyan);
+            color: #000;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+
+        .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 255, 255, 0.2);
+            box-shadow: 0 5px 25px rgba(0, 255, 255, 0.5);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text-color);
+            border: 1px solid var(--border);
+        }
+
+        .btn-outline:hover {
             border-color: var(--cyan);
             color: var(--cyan);
+            transform: translateY(-2px);
         }
 
-        .code-block {
-            background: #000;
-            padding: 1.5rem;
-            border-radius: 8px;
-            font-family: 'JetBrains Mono', monospace;
+        /* Philosophy Cards */
+        .quote-box {
+            background: var(--dark-panel);
+            border-left: 4px solid var(--cyan);
+            border-radius: 0 12px 12px 0;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            font-style: italic;
             border: 1px solid var(--border);
-            overflow-x: auto;
-            color: #4CAF50;
+            border-left-width: 4px;
+            border-left-color: var(--cyan);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .quote-box-es {
+            border-left-color: var(--magenta);
+        }
+
+        .quote-box strong {
+            color: #fff;
+            font-style: normal;
+        }
+
+        /* Feature Cards */
+        .section-title {
+            text-align: center;
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin: 4rem 0 2rem 0;
+            background: linear-gradient(90deg, #fff, var(--cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
             gap: 1.5rem;
-            margin: 3rem 0;
         }
 
-        .feature-card {
-            background: var(--dark-panel);
+        .card {
+            background: var(--card-bg);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 1.5rem;
+            border-radius: 12px;
+            padding: 2rem;
             transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
-        .feature-card:hover {
-            border-color: var(--cyan);
-            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.1);
+        .card:hover {
+            border-color: rgba(0, 255, 255, 0.4);
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(0, 255, 255, 0.08);
         }
 
-        .feature-card h3 {
-            margin-top: 0;
-            color: var(--cyan);
-            font-size: 1.2rem;
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+        }
+
+        .card h3 {
+            margin: 0 0 0.8rem 0;
+            font-size: 1.3rem;
+            color: #fff;
+        }
+
+        .card p {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* Code Terminal */
+        .terminal-box {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 2rem 0;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.5);
+        }
+
+        .terminal-header {
+            background: #11111a;
+            padding: 0.7rem 1.2rem;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 0.5rem;
+            border-bottom: 1px solid var(--border);
         }
 
+        .terminal-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .dot-red { background: #ff5f56; }
+        .dot-yellow { background: #ffbd2e; }
+        .dot-green { background: #27c93f; }
+
+        .terminal-title {
+            font-size: 0.8rem;
+            color: #777;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .terminal-content {
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            color: #00ff88;
+            overflow-x: auto;
+            white-space: pre;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .copy-btn {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid var(--border);
+            color: #aaa;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: var(--cyan);
+            color: #000;
+        }
+
+        /* Footer */
         footer {
-            text-align: center;
-            padding: 3rem 1rem;
             border-top: 1px solid var(--border);
-            margin-top: 4rem;
-            font-size: 0.9rem;
+            padding: 3rem 1.5rem;
+            text-align: center;
             color: #666;
+            font-size: 0.9rem;
+            margin-top: 5rem;
         }
 
-        footer a { color: var(--cyan); text-decoration: none; }
+        footer a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+
+        @media (max-width: 768px) {
+            .neon-title { font-size: 3rem; }
+            .navbar { padding: 1rem; }
+        }
     </style>
 </head>
 <body>
 
+    <div class="ambient-bg"></div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="index.html" class="nav-logo">
+            HiveBear <span>by @kuromi04</span>
+            <span class="nav-tag">v0.2.0</span>
+        </a>
+        <div class="nav-links">
+            <a href="how-it-works.html">Cómo Funciona</a>
+            <a href="https://github.com/kuromi04/TermuxHiveBear">Termux</a>
+            <a href="https://github.com/kuromi04/HiveBear" style="color: var(--cyan);">GitHub ★</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
     <header class="hero">
-        <div class="hero-content">
-            <h1 class="neon-title">HiveBear</h1>
-            <h3 class="neon-subtitle">by @kuromi04</h3>
-            <p class="hero-description">
-                <strong>The Decentralized Peer-to-Peer AI Mesh Network</strong><br>
-                <span style="color: var(--cyan); font-size: 1rem;">La red distribuida de Inteligencia Artificial para todos.</span>
-            </p>
-            <img src="https://raw.githubusercontent.com/kuromi04/HiveBear/main/assets/banner.png" alt="HiveBear Banner" class="banner">
+        <div class="badge-live">
+            <span class="pulse-dot"></span> P2P Mesh Network Online • Cloud Coordinator Active
+        </div>
+        <h1 class="neon-title">HIVEBEAR</h1>
+        <div class="neon-subtitle">by @kuromi04</div>
+        <p class="hero-desc">
+            Red P2P distribuida para correr Inteligencia Artificial abierta. Sin corporaciones centrales, sin suscripciones de pago y con sistema de Karma justo.
+        </p>
+
+        <div class="banner-container">
+            <img src="https://raw.githubusercontent.com/kuromi04/HiveBear/main/assets/banner.png" alt="HiveBear Cyberpunk Bear Banner">
         </div>
     </header>
 
     <div class="container">
-        
-        <div class="philosophy">
+
+        <!-- Action Buttons -->
+        <div class="cta-group">
+            <a href="https://github.com/kuromi04/HiveBear" class="btn btn-primary">
+                ⭐ Repositorio GitHub
+            </a>
+            <a href="how-it-works.html" class="btn btn-outline">
+                🧠 Ver Guía Visual (Docs)
+            </a>
+            <a href="https://github.com/kuromi04/TermuxHiveBear" class="btn btn-outline">
+                📱 Nodo para Termux Android
+            </a>
+        </div>
+
+        <!-- Philosophy Cards -->
+        <div class="quote-box">
             <p><strong>Welcome to the Den.</strong> HiveBear is built by people who think AI should be for everyone - not just people with deep pockets and top-shelf hardware. Share your spare compute, contribute code, help someone get started, or just hang out. The pack looks after its own.</p>
         </div>
 
-        <div class="philosophy philosophy-es">
+        <div class="quote-box quote-box-es">
             <p><strong>Bienvenido a la Guarida.</strong> HiveBear está construido por personas que creen que la IA debería ser para todos, no solo para quienes tienen hardware de gama alta. Comparte tu poder de cómputo libre, contribuye con código, ayuda a alguien a empezar, o simplemente pasa el rato. La manada cuida de los suyos.</p>
         </div>
 
-        <div class="buttons">
-            <a href="https://github.com/kuromi04/HiveBear" class="btn btn-github">⭐ View on GitHub</a>
-            <a href="https://github.com/kuromi04/TermuxHiveBear" class="btn btn-termux">📱 Termux Node</a>
-            <a href="how-it-works.html" class="btn">🧠 How It Works (Docs)</a>
-        </div>
+        <!-- Key Features Grid -->
+        <h2 class="section-title">Innovaciones del Ecosistema</h2>
 
         <div class="features-grid">
-            <div class="feature-card">
-                <h3>⚖️ Karma & Priority Queue</h3>
-                <p>Fair-share compute network. Earn Karma points by serving TFLOPS to the pack. High-karma nodes get instant VIP matchmaking when requesting inference from their mobile or desktop.</p>
+            <div class="card">
+                <div class="card-icon">⚖️</div>
+                <h3>Sistema de Karma & Cola VIP</h3>
+                <p>Moneda de reputación justa. Dona TFLOPS a la manada y gana Karma verificado. Los usuarios VIP_ALPHA tienen pase preferente al pedir cálculos pesados.</p>
             </div>
-            <div class="feature-card">
-                <h3>🔐 Dual-Verification (Anti-Cheat)</h3>
-                <p>Zero fake tokens. Cryptographic work receipts with anti-replay protection ensure every contributor gets genuine credit for the computation they deliver.</p>
+
+            <div class="card">
+                <div class="card-icon">🔐</div>
+                <h3>Anti-Cheat Proof-of-Work</h3>
+                <p>Cero trampas. Recibos de trabajo firmados criptográficamente y protección anti-replay. Imposible inflar puntos con bots o código modificado.</p>
             </div>
-            <div class="feature-card">
-                <h3>📱 Termux & Mobile Native</h3>
-                <p>Designed for true decentralization. Turn spare Android smartphones into active AI nodes or pocket clients connected to your home PC mesh.</p>
+
+            <div class="card">
+                <div class="card-icon">📱</div>
+                <h3>Termux & Android Nativo</h3>
+                <p>Convierte cualquier teléfono Android en un cliente móvil inteligente o nodo de cómputo, conectado directamente con PCs de escritorio.</p>
+            </div>
+
+            <div class="card">
+                <div class="card-icon">🛡️</div>
+                <h3>Seguridad & Cifrado QUIC</h3>
+                <p>Comunicación blindada punto a punto con TLS 1.3. Los nodos solo procesan tensores numéricos; es matemáticamente imposible acceder a archivos personales.</p>
+            </div>
+
+            <div class="card">
+                <div class="card-icon">🌐</div>
+                <h3>Sin Abrir Puertos (NAT Bypass)</h3>
+                <p>STUN y Hole-Punching automático. Conecta dos computadoras en países distintos sin necesidad de configurar routers ni pagar VPNs privadas.</p>
+            </div>
+
+            <div class="card">
+                <div class="card-icon">⚡</div>
+                <h3>100% Escrito en Rust</h3>
+                <p>Velocidad nativa, mínimo consumo de memoria RAM y máxima eficiencia energética para computadoras y dispositivos móviles.</p>
             </div>
         </div>
 
-        <h2>Universal Setup (Linux/macOS/Android)</h2>
-        <div class="code-block">
+        <!-- One Line Installers -->
+        <h2 class="section-title">Instalación Rápida en 1 Línea</h2>
+
+        <p style="text-align: center; color: var(--text-muted); margin-bottom: 2rem;">
+            Instala todas las dependencias y prepara el entorno automáticamente:
+        </p>
+
+        <!-- Linux / Mac / Termux -->
+        <div class="terminal-box">
+            <div class="terminal-header">
+                <div class="terminal-dots">
+                    <span class="dot dot-red"></span>
+                    <span class="dot dot-yellow"></span>
+                    <span class="dot dot-green"></span>
+                </div>
+                <span class="terminal-title">bash — Linux / macOS / Android (Termux)</span>
+                <button class="copy-btn" onclick="navigator.clipboard.writeText('curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash')">Copiar</button>
+            </div>
+            <div class="terminal-content">
 curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash
+            </div>
         </div>
 
-        <h2 style="margin-top: 4rem;">Windows PowerShell Setup</h2>
-        <div class="code-block" style="color: #00ffff;">
+        <!-- Windows -->
+        <div class="terminal-box">
+            <div class="terminal-header">
+                <div class="terminal-dots">
+                    <span class="dot dot-red"></span>
+                    <span class="dot dot-yellow"></span>
+                    <span class="dot dot-green"></span>
+                </div>
+                <span class="terminal-title">powershell — Windows 10 / 11 (Administrador)</span>
+                <button class="copy-btn" onclick="navigator.clipboard.writeText('irm https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.ps1 | iex')">Copiar</button>
+            </div>
+            <div class="terminal-content" style="color: var(--cyan);">
 irm https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.ps1 | iex
+            </div>
         </div>
 
     </div>
 
+    <!-- Footer -->
     <footer>
-        <p>Patched, Enhanced & Maintained by <a href="https://github.com/kuromi04">@kuromi04</a></p>
-        <p>MIT License - The HiveBear Open Source Project</p>
+        <p>Ecosistema HiveBear P2P — Diseñado, Parcheado y Mantenido por <a href="https://github.com/kuromi04">@kuromi04</a></p>
+        <p style="color: #444; margin-top: 0.5rem;">Licencia de Código Abierto MIT • "La manada cuida de los suyos"</p>
     </footer>
 
 </body>
