@@ -33,7 +33,8 @@
 <a name="english"></a>
 ## 🇬🇧 English Documentation
 
-### 🛠️ Patches & Improvements in this Edition (by @kuromi04)
+- ⚖️ **Anti-Cheat Karma & Priority Queue:** Fair-share incentive network. Nodes gain **Karma Points** by sharing verified compute (TFLOPS). High-karma nodes receive VIP Tier 1 priority matchmaking when requesting heavy inference from the mesh.
+- 🔐 **Dual-Verification Proof-of-Work:** Cryptographic work receipts with anti-replay protection prevent malicious nodes from spoofing token counts.
 - 📖 **New Visual Documentation:** Read our [Beginner's Guide to HiveBear P2P Magic](docs/HOW_IT_WORKS.md).
 - 🚀 **hivebear-coordinator (P2P Signaling Server):** Dedicated, lightweight Rust HTTP server with Docker support to coordinate P2P mesh discovery, STUN hole-punching, and swarm matchmaking worldwide.
 - 🛡️ **Cybersecurity Hardened:** Mitigated Denial-of-Service (DoS) and memory leak risks by bounding signal buffers (max 50 queue per peer) and cleaning inactive state.
@@ -137,6 +138,8 @@ Before building, install all required dependencies automatically:
 ## 🇪🇸 Documentación en Español
 
 ### 🛠️ Mejoras y Parches de esta Edición (por @kuromi04)
+- ⚖️ **Sistema de Karma Anti-Trampas y Cola VIP:** Red de incentivos justos. Los nodos ganan **Puntos de Karma** compartiendo cómputo verificado (TFLOPS). Los nodos con alto Karma obtienen prioridad VIP Tier 1 cuando necesitan procesar consultas pesadas desde su celular u ordenador.
+- 🔐 **Doble Verificación Criptográfica (Proof-of-Work):** Recibos de trabajo firmados con protección anti-replay para evitar que nodos maliciosos falsifiquen cómputo o inflen puntos.
 - 📖 **Nueva Documentación Visual:** Lee nuestra [Guía para principiantes: Cómo funciona la Magia P2P](docs/HOW_IT_WORKS.md).
 - 🚀 **Servidor Coordinador P2P (`hivebear-coordinator`):** Servidor HTTP ultraligero en Rust con Docker para señalización, STUN hole-punching y emparejamiento de nodos global.
 - 🛡️ **Seguridad Mejorada:** Prevención de ataques DoS y fugas de memoria con buffers acotados (máximo 50 mensajes en cola por nodo) y purga automática de nodos inactivos.

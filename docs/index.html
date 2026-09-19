@@ -158,6 +158,35 @@
             color: #4CAF50;
         }
 
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 3rem 0;
+        }
+
+        .feature-card {
+            background: var(--dark-panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            border-color: var(--cyan);
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.1);
+        }
+
+        .feature-card h3 {
+            margin-top: 0;
+            color: var(--cyan);
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
         footer {
             text-align: center;
             padding: 3rem 1rem;
@@ -198,6 +227,21 @@
             <a href="https://github.com/kuromi04/HiveBear" class="btn btn-github">⭐ View on GitHub</a>
             <a href="https://github.com/kuromi04/TermuxHiveBear" class="btn btn-termux">📱 Termux Node</a>
             <a href="HOW_IT_WORKS.md" class="btn">🧠 How It Works (Docs)</a>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <h3>⚖️ Karma & Priority Queue</h3>
+                <p>Fair-share compute network. Earn Karma points by serving TFLOPS to the pack. High-karma nodes get instant VIP matchmaking when requesting inference from their mobile or desktop.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔐 Dual-Verification (Anti-Cheat)</h3>
+                <p>Zero fake tokens. Cryptographic work receipts with anti-replay protection ensure every contributor gets genuine credit for the computation they deliver.</p>
+            </div>
+            <div class="feature-card">
+                <h3>📱 Termux & Mobile Native</h3>
+                <p>Designed for true decentralization. Turn spare Android smartphones into active AI nodes or pocket clients connected to your home PC mesh.</p>
+            </div>
         </div>
 
         <h2>Universal Setup (Linux/macOS/Android)</h2>

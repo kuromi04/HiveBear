@@ -56,6 +56,14 @@ Si tú estás en México y tu amigo en Ucrania, ¿cómo se conectan sin abrir pu
 3. **WebRTC / QUIC:** Una vez conectados, los datos viajan por un protocolo diseñado para videollamadas y juegos de alta velocidad. Si el internet falla por un segundo, la red se repara sola y sigue transmitiendo.
 
 ---
+
+## ⚖️ 5. El Sistema de Karma: ¿Por qué compartir cómputo?
+
+* **Moneda de Confianza:** No cobramos dinero ni vendemos tus datos. HiveBear usa **Karma**.
+* **Prueba de Trabajo (Proof-of-Work Anti-Trampas):** Cada vez que tu PC procesa tokens para un amigo o celular en la calle, el receptor genera un recibo digital firmado criptográficamente. Al presentarlo al servidor, ganas puntos de Karma.
+* **Prioridad VIP:** Los usuarios con más Karma (`VIP_ALPHA`) obtienen prioridad absoluta en la cola cuando necesitan cómputo pesado, asegurando que la manada siempre premie a quienes aportan.
+
+---
 ---
 
 <a name="english"></a>
@@ -82,3 +90,9 @@ This special edition connects two previously separate worlds:
 * **mDNS:** Instant auto-discovery if you are on the same WiFi.
 * **STUN / Hole Punching:** Our Coordinator Server acts as a matchmaker, tricking strict NAT routers into opening a direct, secure tunnel between different countries without manual port forwarding.
 * **QUIC:** Ultra-fast, fault-tolerant streaming protocol for the AI tensors.
+
+## ⚖️ 5. The Karma System: Proof-of-Work & Fair Share
+* **Trust-Based Compute:** No subscriptions or paywalls. HiveBear runs on **Karma**.
+* **Anti-Cheat Cryptographic Receipts:** When your PC donates TFLOPS to another member, the requester returns a signed digital receipt. The coordinator verifies it against replay attacks and awards Karma.
+* **VIP Priority Queue:** Active contributors unlock the `VIP_ALPHA` tier, ensuring instantaneous matchmaking and model offloading whenever they need it.
+
