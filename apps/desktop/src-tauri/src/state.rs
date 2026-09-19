@@ -62,9 +62,10 @@ impl AppState {
             }
         }
 
-        let config = self.config.lock().unwrap_or_else(|e| e.into_inner());
+        let mut config = self.config.lock().unwrap_or_else(|e| e.into_inner());
         if !config.mesh.enabled {
-            return Err("Mesh is disabled in settings".into());
+            config.mesh.enabled = true;
+            let _ = config.save();
         }
 
         let tier = hivebear_mesh::MeshTier::from_str_lossy(&config.mesh.tier);

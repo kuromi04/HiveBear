@@ -5,7 +5,6 @@ mod validation;
 
 use state::AppState;
 use tauri::Manager;
-use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

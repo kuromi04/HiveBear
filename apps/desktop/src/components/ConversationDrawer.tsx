@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from "motion/react";
 import type { Conversation } from "../types";
 import { Plus, Search, X, MessageSquare, Pencil, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
@@ -59,52 +58,34 @@ export default function ConversationDrawer({
     [onDelete],
   );
 
+  if (!open) return null;
+
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="absolute inset-0 z-30 bg-black/30"
-            onClick={onClose}
-          />
-
-          {/* Drawer */}
-          <motion.div
-            initial={{ x: -280, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -280, opacity: 0 }}
-            transition={{ type: "spring", damping: 30, stiffness: 400 }}
-            className="absolute left-0 top-0 z-40 flex h-full w-72 flex-col border-r border-border bg-surface shadow-[var(--shadow-overlay)]"
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface select-none z-10 animate-[fade-in]">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+          Historial de Chats
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onNew}
+            className="interactive-hover rounded-[var(--radius-md)] p-1 text-text-muted hover:bg-surface-raised hover:text-text-primary"
+            title="Nuevo chat"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-                Conversations
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={onNew}
-                  className="interactive-hover rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
-                  title="New conversation"
-                >
-                  <Plus size={14} />
-                </button>
-                <button
-                  onClick={onClose}
-                  className="interactive-hover rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
-                  title="Close"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
+            <Plus size={14} />
+          </button>
+          <button
+            onClick={onClose}
+            className="interactive-hover rounded-[var(--radius-md)] p-1 text-text-muted hover:bg-surface-raised hover:text-text-primary"
+            title="Ocultar historial"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </div>
 
-            {/* Search */}
+      {/* Search */}
             <div className="border-b border-border px-3 py-2">
               <div className="relative">
                 <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
@@ -132,7 +113,6 @@ export default function ConversationDrawer({
                     key={conv.id}
                     onClick={() => {
                       onSelect(conv.id);
-                      onClose();
                     }}
                     className={[
                       "group mx-1.5 mb-0.5 flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs interactive-hover",
@@ -189,9 +169,6 @@ export default function ConversationDrawer({
                 ))
               )}
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+    </aside>
   );
 }

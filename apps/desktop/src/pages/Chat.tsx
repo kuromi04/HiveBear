@@ -21,8 +21,8 @@ export default function Chat() {
   const [chatParams, setChatParams] = useState<ChatParams>({ ...DEFAULT_CHAT_PARAMS });
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Conversation drawer
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Conversation drawer (open by default like ChatGPT)
+  const [drawerOpen, setDrawerOpen] = useState(true);
 
   // Conversation persistence
   const {
@@ -174,8 +174,8 @@ export default function Chat() {
   }));
 
   return (
-    <div className="relative flex h-full flex-col">
-      {/* Conversation drawer overlay */}
+    <div className="flex h-full w-full overflow-hidden">
+      {/* Persistent Conversation Sidebar */}
       <ConversationDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -188,30 +188,32 @@ export default function Chat() {
         onRename={handleRenameConversation}
       />
 
-      {/* Top bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
-        <div className="flex items-center gap-2">
+      {/* Main Chat Area */}
+      <div className="relative flex flex-1 flex-col h-full overflow-hidden min-w-0">
+        {/* Top bar */}
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setDrawerOpen(!drawerOpen)}
+              className="interactive-hover rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
+              title={drawerOpen ? "Ocultar panel" : "Ver historial de chats"}
+            >
+              <PanelLeft size={16} />
+            </button>
+            <h1 className="text-sm font-medium text-text-primary">
+              {activeId
+                ? conversations.find((c) => c.id === activeId)?.title || "Chat"
+                : "New Chat"}
+            </h1>
+          </div>
           <button
-            onClick={() => setDrawerOpen(!drawerOpen)}
+            onClick={handleNewChat}
             className="interactive-hover rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
-            title="Conversations"
+            title="New chat"
           >
-            <PanelLeft size={16} />
+            <Plus size={16} />
           </button>
-          <h1 className="text-sm font-medium text-text-primary">
-            {activeId
-              ? conversations.find((c) => c.id === activeId)?.title || "Chat"
-              : "New Chat"}
-          </h1>
         </div>
-        <button
-          onClick={handleNewChat}
-          className="interactive-hover rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
-          title="New chat"
-        >
-          <Plus size={16} />
-        </button>
-      </div>
 
       {/* Messages or empty state */}
       <div className="flex-1 overflow-y-auto px-6 py-6">
@@ -356,6 +358,7 @@ export default function Chat() {
           onChatParamsChange={setChatParams}
         />
       )}
+      </div>
     </div>
   );
 }

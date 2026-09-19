@@ -54,13 +54,19 @@ export default function Sidebar() {
       <div className="flex h-14 items-center gap-2 px-4">
         <img src="/assets/logo.png" alt="HiveBear" className="h-7 w-7 shrink-0 rounded-[var(--radius-md)]" />
         {!collapsed && (
-          <motion.span
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-sm font-semibold tracking-tight whitespace-nowrap"
-          >
-            HiveBear
-          </motion.span>
+          <div className="flex flex-col">
+            <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+              <span className="text-sm font-bold tracking-tight text-text-primary">
+                HiveBear
+              </span>
+              <span className="text-[10px] font-mono text-paw-500 font-semibold">
+                by kuromi04
+              </span>
+            </div>
+            <span className="text-[9px] text-text-muted">
+              v0.2.0 • P2P Distributed
+            </span>
+          </div>
         )}
       </div>
 

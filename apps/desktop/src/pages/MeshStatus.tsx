@@ -160,11 +160,19 @@ export default function MeshStatus() {
                     if (connection.running) {
                       await leaveMesh();
                     } else {
+                      if (!status.enabled) {
+                        const cfg = await getMeshConfig();
+                        cfg.enabled = true;
+                        await saveMeshConfig(cfg);
+                      }
                       await joinMesh();
                     }
                     await refresh();
-                  } catch { /* ignore */ }
-                  finally { setJoining(false); }
+                  } catch (err: any) {
+                    console.error("Failed to join/leave mesh:", err);
+                  } finally {
+                    setJoining(false);
+                  }
                 }}
               >
                 {connection.running ? <WifiOff size={14} /> : <Wifi size={14} />}
