@@ -240,7 +240,7 @@ enum Commands {
         model: Option<String>,
 
         /// Coordinator server URL
-        #[arg(long, default_value = "http://localhost:7879")]
+        #[arg(long, default_value = "http://34.66.188.245")]
         coordinator: String,
     },
 
