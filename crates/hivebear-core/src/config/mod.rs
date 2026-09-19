@@ -254,7 +254,7 @@ impl Default for MeshConfig {
             enabled: true,
             auto_join: true,
             port: 7878,
-            coordination_server: "https://mesh.hivebear.com".into(),
+            coordination_server: "http://34.66.188.245".into(),
             bootstrap_servers: default_bootstrap_servers(),
             stun_servers: default_stun_servers(),
             relay_servers: default_relay_servers(),
