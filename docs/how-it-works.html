@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cómo Funciona HiveBear - Guía Visual P2P</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+    <style>
+        :root {
+            --bg-color: #0a0a0f;
+            --text-color: #e0e0e0;
+            --cyan: #00ffff;
+            --magenta: #ff00ff;
+            --dark-panel: #111116;
+            --card-bg: #15151e;
+            --border: #222;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.7;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.2rem 2rem;
+            background: rgba(10, 10, 15, 0.9);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        .nav-brand {
+            font-weight: 800;
+            font-size: 1.3rem;
+            color: #fff;
+            text-decoration: none;
+            letter-spacing: 1px;
+        }
+
+        .nav-brand span { color: var(--cyan); }
+
+        .nav-links a {
+            color: #aaa;
+            text-decoration: none;
+            margin-left: 1.5rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover { color: var(--cyan); }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+        }
+
+        .header-title {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header-title h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            background: -webkit-linear-gradient(45deg, var(--cyan), var(--magenta));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-title p {
+            color: #888;
+            font-size: 1.1rem;
+        }
+
+        .badge-author {
+            display: inline-block;
+            background: rgba(0, 255, 255, 0.1);
+            color: var(--cyan);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            margin-top: 0.5rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            transition: border-color 0.3s;
+        }
+
+        .card:hover {
+            border-color: rgba(0, 255, 255, 0.3);
+        }
+
+        h2 {
+            font-size: 1.6rem;
+            color: #fff;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.8rem;
+        }
+
+        .tip-box {
+            background: rgba(0, 255, 255, 0.05);
+            border-left: 4px solid var(--cyan);
+            padding: 1.2rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+
+        .tip-box strong { color: var(--cyan); }
+
+        .diagram-container {
+            background: #0d0d12;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+
+        ul {
+            padding-left: 1.2rem;
+        }
+
+        li {
+            margin-bottom: 0.6rem;
+        }
+
+        li strong {
+            color: #fff;
+        }
+
+        .btn-back {
+            display: inline-block;
+            background: transparent;
+            color: var(--cyan);
+            border: 1px solid var(--cyan);
+            padding: 0.8rem 1.6rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin-top: 2rem;
+        }
+
+        .btn-back:hover {
+            background: var(--cyan);
+            color: #000;
+        }
+
+        footer {
+            text-align: center;
+            padding: 3rem 1rem;
+            border-top: 1px solid var(--border);
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a href="index.html" class="nav-brand">HiveBear <span>by @kuromi04</span></a>
+        <div class="nav-links">
+            <a href="index.html">Inicio</a>
+            <a href="https://github.com/kuromi04/HiveBear">GitHub</a>
+            <a href="https://github.com/kuromi04/TermuxHiveBear">Termux</a>
+        </div>
+    </nav>
+
+    <div class="container">
+
+        <div class="header-title">
+            <h1>Cómo Funciona la Magia P2P</h1>
+            <p>Guía interactiva y visual para entender la red distribuida de Inteligencia Artificial.</p>
+            <div class="badge-author">Parcheado, Mejorado y Mantenido por @kuromi04</div>
+        </div>
+
+        <!-- SECCIÓN 1 -->
+        <div class="card">
+            <h2>🧩 1. ¿Qué es una red P2P de Inteligencia Artificial?</h2>
+            <p>Imagina que un modelo de IA moderno (como Llama 3) es un <strong>rompecabezas gigante de 70,000 piezas</strong>. Si intentas armarlo tú solo en tu teléfono celular, el teléfono se quedará sin memoria, se calentará y la batería morirá en minutos.</p>
+            
+            <div class="tip-box">
+                <strong>La Solución P2P (Peer-to-Peer):</strong> En lugar de depender de una supercomputadora central corporativa (como ChatGPT), HiveBear conecta tu teléfono con las computadoras de otros miembros de la manada. Cada máquina procesa una porción del rompecabezas en milisegundos y le envía la respuesta lista a tu pantalla.
+            </div>
+        </div>
+
+        <!-- SECCIÓN 2 -->
+        <div class="card">
+            <h2>📱 2. El Ecosistema Termux + PC</h2>
+            <p>Esta edición creada por <strong>@kuromi04</strong> une dos mundos que antes estaban separados:</p>
+
+            <div class="diagram-container">
+                <pre class="mermaid">
+graph TD
+    A[📱 Celular Android <br> TermuxHiveBear] <-->|Petición Ligera| B((☁️ Coordinador Cloud <br> Servidor de kuromi04))
+    C[💻 PC Gamer / Torre <br> Windows / Linux] <-->|Dona su GPU| B
+    D[🍏 Mac Silicon <br> macOS M1/M2/M3] <-->|Dona su CPU| B
+    
+    A -.->|🌐 Conexión P2P Directa Encriptada| C
+    A -.->|🌐 Conexión P2P Directa Encriptada| D
+                </pre>
+            </div>
+
+            <ul>
+                <li><strong>Tu Computadora (Windows / Linux / Mac):</strong> Funciona como el "músculo". Descarga los gigabytes pesados de la IA y los corre sobre su procesador o tarjeta gráfica (GPU).</li>
+                <li><strong>Tu Teléfono (Android con Termux):</strong> Funciona como el cliente móvil ágil. Te permite chatear y pedir respuestas complejas sin sobrecalentar el smartphone.</li>
+            </ul>
+        </div>
+
+        <!-- SECCIÓN 3 -->
+        <div class="card">
+            <h2>⚖️ 3. El Sistema de Karma y Prioridad VIP</h2>
+            <p>HiveBear no cobra dinero ni te llena la pantalla de anuncios. Funciona con un modelo de <strong>Confianza y Reciprocidad</strong>:</p>
+
+            <ul>
+                <li><strong>Puntos de Karma:</strong> Cada vez que tu PC o dispositivo procesa tokens para otro usuario, sumas puntos de Karma automáticamente a tu cuenta.</li>
+                <li><strong>Anti-Trampas (Proof-of-Work Criptográfico):</strong> El receptor firma un recibo digital único. No puedes hackear el cliente para inventar puntos; el coordinador verifica cada recibo contra ataques de repetición.</li>
+                <li><strong>Cola de Prioridad VIP_ALPHA:</strong> Al acumular más de 500 puntos de Karma, desbloqueas el nivel <em>VIP_ALPHA</em>. Cuando tú hagas una consulta pesada desde la calle, tu petición salta al primer lugar de la fila.</li>
+            </ul>
+        </div>
+
+        <!-- SECCIÓN 4 -->
+        <div class="card">
+            <h2>🛡️ 4. Seguridad y Privacidad: ¿Me pueden hackear?</h2>
+            <p><strong>¡Rotundamente NO!</strong> La seguridad fue la prioridad número uno al rediseñar la arquitectura:</p>
+
+            <ul>
+                <li><strong>Cifrado Militar de Extremo a Extremo (QUIC / TLS 1.3):</strong> Toda la información viaja blindada. Ni tu proveedor de internet ni personas en tu red local pueden leer tus prompts.</li>
+                <li><strong>Aislamiento Matemático (Sandboxing):</strong> Los nodos solo intercambian matrices matemáticas (tensores numéricos). Es técnicamente imposible que alguien acceda a tus fotos, archivos o ejecute código malicioso en tu sistema.</li>
+                <li><strong>Defensa Anti-DoS en la Nube:</strong> El coordinador implementa colas acotadas (máximo 50 señales) y purga activa de conexiones fantasma para impedir ataques de saturación.</li>
+            </ul>
+        </div>
+
+        <!-- SECCIÓN 5 -->
+        <div class="card">
+            <h2>📡 5. Protocolos: ¿Cómo se conectan los dispositivos?</h2>
+            <p>No necesitas abrir puertos en tu router ni saber de redes avanzadas:</p>
+
+            <ul>
+                <li><strong>mDNS:</strong> Si estás conectado al mismo WiFi que tu PC, se encuentran al instante como si fuera Bluetooth.</li>
+                <li><strong>STUN & Hole Punching:</strong> Si estás en otra ciudad o con datos móviles (4G/5G), nuestro Servidor Coordinador ayuda a que ambos routers abran un túnel seguro directo entre ellos.</li>
+                <li><strong>QUIC Protocol:</strong> Diseñado para conexiones rápidas y con tolerancia a caídas. Si entras a un ascensor o cambia tu red, se reconecta automáticamente sin perder el chat.</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center;">
+            <a href="index.html" class="btn-back">⬅️ Volver a la Página Principal</a>
+        </div>
+
+    </div>
+
+    <footer>
+        <p>HiveBear P2P Mesh Engine - Diseñado y Mantenido por <a href="https://github.com/kuromi04" style="color: var(--cyan); text-decoration: none;">@kuromi04</a></p>
+        <p>Licencia MIT - Código Abierto para Todos</p>
+    </footer>
+
+</body>
+</html>
