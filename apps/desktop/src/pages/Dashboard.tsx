@@ -60,9 +60,37 @@ export default function Dashboard() {
       <div className="space-y-6">
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-base font-semibold text-text-primary">Dashboard</h1>
+          <div>
+            <h1 className="text-base font-semibold text-text-primary">HiveBear Dashboard</h1>
+            <p className="text-[11px] text-text-muted">Descentralizado & Mantenido por @kuromi04</p>
+          </div>
           <MeshStatusPill />
         </div>
+
+        {/* ── Quick Karma & P2P Swarm Bar ──────────────────────────────── */}
+        <Card padding="sm" className="bg-surface-overlay/60 border-border/80">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] bg-paw-500/10 text-paw-500 font-bold text-sm">
+                ⚖️
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-text-primary">Karma & Priority Status</span>
+                  <Badge variant="accent">VIP Network Active</Badge>
+                </div>
+                <p className="text-[11px] text-text-muted">
+                  Comparte cómputo local con la red para subir de nivel y obtener inferencia prioritaria.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={() => navigate("/mesh")}>
+                Ver Nodos y Ranking
+              </Button>
+            </div>
+          </div>
+        </Card>
 
         {/* ── Zone 1: Hero / Status ─────────────────────────────────────── */}
 

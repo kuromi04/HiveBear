@@ -173,6 +173,9 @@ export default function MeshStatus() {
             </div>
           </Card>
         )}
+
+        {/* Live Network Karma & Peers Leaderboard */}
+        <NetworkKarmaLeaderboard coordinatorUrl={status.coordination_server} />
       </div>
     </Surface>
   );
@@ -186,6 +189,119 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
         <span className="text-[11px] uppercase tracking-wider">{label}</span>
       </div>
       <p className="truncate text-sm font-medium">{value}</p>
+    </Card>
+  );
+}
+
+interface CoordinatorNode {
+  node_id: string;
+  addr: string;
+  tier: string;
+  ram_bytes: number;
+  vram_bytes: number;
+  karma?: number;
+}
+
+function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string }) {
+  const [nodes, setNodes] = useState<CoordinatorNode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDashboard = useCallback(async () => {
+    try {
+      const target = coordinatorUrl.replace(/\/+$/, "");
+      const res = await fetch(`${target}/dashboard`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setNodes(data.nodes || []);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error connecting to coordinator");
+    } finally {
+      setLoading(false);
+    }
+  }, [coordinatorUrl]);
+
+  useEffect(() => {
+    fetchDashboard();
+    const interval = setInterval(fetchDashboard, 15000);
+    return () => clearInterval(interval);
+  }, [fetchDashboard]);
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4 border-b border-border pb-3">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <span>⚡ Network Swarm & Karma Leaderboard</span>
+            <span className="text-[10px] bg-paw-500/10 text-paw-500 border border-paw-500/30 px-2 py-0.5 rounded-full font-mono">
+              Live Cloud Coordinator
+            </span>
+          </h2>
+          <p className="text-xs text-text-muted mt-0.5">
+            Active peer nodes sharing compute across the decentralized mesh.
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={fetchDashboard} disabled={loading}>
+          {loading ? "Refreshing…" : "Refresh"}
+        </Button>
+      </div>
+
+      {error ? (
+        <div className="rounded-[var(--radius-md)] bg-surface-overlay p-4 text-xs text-text-muted text-center">
+          Coordinator offline or unreachable: <span className="font-mono text-danger">{error}</span>
+        </div>
+      ) : nodes.length === 0 ? (
+        <div className="rounded-[var(--radius-md)] bg-surface-overlay p-6 text-center text-xs text-text-muted">
+          No other active nodes detected in the network right now. Be the pack leader!
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-border/60 text-text-muted">
+                <th className="pb-2 font-medium">Node ID</th>
+                <th className="pb-2 font-medium">Address</th>
+                <th className="pb-2 font-medium">RAM / VRAM</th>
+                <th className="pb-2 font-medium text-right">Karma Balance</th>
+                <th className="pb-2 font-medium text-right">Priority Tier</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/30 font-mono">
+              {nodes.map((node) => {
+                const k = node.karma ?? 0;
+                const tier = k >= 500 ? "VIP_ALPHA" : k > 0 ? "CONTRIBUTOR" : "COMMUNITY";
+                return (
+                  <tr key={node.node_id} className="hover:bg-surface-overlay/40 transition-colors">
+                    <td className="py-2.5 font-medium text-text-primary">
+                      {node.node_id.slice(0, 14)}…
+                    </td>
+                    <td className="py-2.5 text-text-muted">
+                      {node.addr}
+                    </td>
+                    <td className="py-2.5 text-text-secondary">
+                      {(node.ram_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB / {(node.vram_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB
+                    </td>
+                    <td className="py-2.5 text-right font-bold text-success">
+                      +{k} pts
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <span className={[
+                        "inline-block px-2 py-0.5 rounded text-[10px] font-sans font-semibold",
+                        tier === "VIP_ALPHA" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30"
+                          : tier === "CONTRIBUTOR" ? "bg-success/10 text-success border border-success/30"
+                          : "bg-surface-overlay text-text-muted"
+                      ].join(" ")}>
+                        {tier}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 }

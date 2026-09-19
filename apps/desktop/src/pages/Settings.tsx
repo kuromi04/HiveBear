@@ -275,10 +275,10 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 // ── About ──────────────────────────────────────────────────────────
 
 const ABOUT_LINKS: ReadonlyArray<{ label: string; url: string }> = [
-  { label: "About HiveBear", url: "https://hivebear.com/about" },
-  { label: "Privacy Policy", url: "https://hivebear.com/privacy" },
-  { label: "Terms of Service", url: "https://hivebear.com/terms" },
-  { label: "Release notes & downloads", url: "https://github.com/BeckhamLabsLLC/HiveBear/releases" },
+  { label: "HiveBear Official Website", url: "https://kuromi04.github.io/HiveBear/" },
+  { label: "Cómo Funciona la Magia P2P (Guía)", url: "https://kuromi04.github.io/HiveBear/how-it-works.html" },
+  { label: "Termux Mobile Node (GitHub)", url: "https://github.com/kuromi04/TermuxHiveBear" },
+  { label: "HiveBear Core Repository", url: "https://github.com/kuromi04/HiveBear" },
 ];
 
 function AboutSection() {
@@ -296,7 +296,7 @@ function AboutSection() {
         <img src="/assets/logo.png" alt="" aria-hidden className="h-8 w-8 rounded-[var(--radius-md)]" />
         <div>
           <p className="font-medium text-text-primary">HiveBear Desktop</p>
-          <p className="font-mono text-xs text-text-muted">v{__APP_VERSION__}</p>
+          <p className="font-mono text-xs text-text-muted">v{__APP_VERSION__} • Patched by @kuromi04</p>
         </div>
       </div>
       <ul className="space-y-1">
@@ -313,7 +313,7 @@ function AboutSection() {
         ))}
       </ul>
       <p className="text-xs text-text-muted leading-relaxed">
-        HiveBear is open-source software built by BeckhamLabs. Your device identity is a local Ed25519 keypair — it never leaves your machine.
+        HiveBear es una red descentralizada de cómputo P2P creada para la comunidad. Diseñado, parcheado y mantenido por @kuromi04. Tu identidad es una clave criptográfica Ed25519 local.
       </p>
     </div>
   );
