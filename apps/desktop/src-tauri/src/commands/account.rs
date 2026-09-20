@@ -553,16 +553,6 @@ pub async fn revoke_api_key(state: State<'_, AppState>, key_id: String) -> CmdRe
 
 // ── Internal helpers ────────────────────────────────────────────────
 
-/// Load the device Ed25519 signing key from the identity file, or generate a new one.
-///
-/// Delegates to `hivebear_mesh::NodeIdentity` so the desktop app and mesh node
-/// share the same persistent identity.
-fn load_device_identity(path: &std::path::Path) -> Result<ed25519_dalek::SigningKey, String> {
-    let identity = hivebear_mesh::NodeIdentity::load_or_generate(path)
-        .map_err(|e| format!("Failed to load device identity: {e}"))?;
-    Ok(identity.signing_key)
-}
-
 async fn try_refresh(state: &AppState) -> Result<String, String> {
     let refresh_token = {
         let config = state.config.lock().unwrap_or_else(|e| e.into_inner());
