@@ -250,6 +250,7 @@ async fn poll_signals(
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct MatchmakeRequest {
     node_id: String,
     total_vram_bytes: Option<i64>,
