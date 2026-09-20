@@ -34,11 +34,7 @@ where
             buffer.push_str(&text);
 
             // Process all complete lines in the buffer
-            loop {
-                let Some(newline_pos) = buffer.find('\n') else {
-                    break;
-                };
-
+            while let Some(newline_pos) = buffer.find('\n') {
                 let line = buffer[..newline_pos].trim_end_matches('\r').to_string();
                 buffer = buffer[newline_pos + 1..].to_string();
 

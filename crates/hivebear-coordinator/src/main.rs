@@ -176,16 +176,15 @@ async fn list_peers(
     let mut result = Vec::new();
     for entry in state.nodes.iter() {
         let info = &entry.value().info;
-        if info.available_memory_bytes >= min_mem {
-            if target_model.is_empty()
+        if info.available_memory_bytes >= min_mem
+            && (target_model.is_empty()
                 || info
                     .serving_model_id
                     .as_ref()
                     .map(|m| m.contains(&target_model))
-                    .unwrap_or(true)
-            {
-                result.push(info.clone());
-            }
+                    .unwrap_or(true))
+        {
+            result.push(info.clone());
         }
     }
     Json(result)
@@ -277,7 +276,7 @@ async fn matchmake(
         })
         .collect();
 
-    ranked_peers.sort_by(|a, b| b.2.cmp(&a.2));
+    ranked_peers.sort_by_key(|a| std::cmp::Reverse(a.2));
 
     let tier_status = if requester_karma >= 500 {
         "VIP_ALPHA"

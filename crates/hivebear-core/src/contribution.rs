@@ -134,16 +134,11 @@ pub fn plan_contribution(profile: &HardwareProfile) -> ContributionPlan {
     };
 
     // How many layers this peer can handle locally
-    let bytes_per_layer = if layers > 0 {
-        model_size / layers as u64
-    } else {
-        model_size
-    };
-    let max_layers = if bytes_per_layer > 0 {
-        (total_usable / bytes_per_layer).min(layers as u64) as u32
-    } else {
-        layers
-    };
+    let bytes_per_layer = model_size.checked_div(layers as u64).unwrap_or(model_size);
+    let max_layers = total_usable
+        .checked_div(bytes_per_layer)
+        .map(|l| l.min(layers as u64) as u32)
+        .unwrap_or(layers);
 
     ContributionPlan {
         tier,

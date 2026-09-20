@@ -23,8 +23,8 @@ pub fn convert_for_transfer(
 /// Convert F32 bytes to F16 bytes (halves the size).
 fn f32_to_f16(data: &[u8]) -> Vec<u8> {
     let mut output = Vec::with_capacity(data.len() / 2);
-    for chunk in data.chunks_exact(4) {
-        let f = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+    for chunk in data.as_chunks::<4>().0 {
+        let f = f32::from_le_bytes(*chunk);
         let h = f16_from_f32(f);
         output.extend_from_slice(&h.to_le_bytes());
     }
@@ -34,8 +34,8 @@ fn f32_to_f16(data: &[u8]) -> Vec<u8> {
 /// Convert F16 bytes to F32 bytes (doubles the size).
 fn f16_to_f32(data: &[u8]) -> Vec<u8> {
     let mut output = Vec::with_capacity(data.len() * 2);
-    for chunk in data.chunks_exact(2) {
-        let h = u16::from_le_bytes([chunk[0], chunk[1]]);
+    for chunk in data.as_chunks::<2>().0 {
+        let h = u16::from_le_bytes(*chunk);
         let f = f32_from_f16(h);
         output.extend_from_slice(&f.to_le_bytes());
     }

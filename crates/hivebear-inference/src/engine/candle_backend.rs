@@ -392,22 +392,28 @@ fn activation_to_tensor(act: &ActivationData, device: &Device) -> Result<Tensor>
     let floats: Vec<f32> = match act.dtype {
         ActivationDtype::F32 => act
             .data
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes(*c))
             .collect(),
         ActivationDtype::F16 => act
             .data
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| {
-                let bits = u16::from_le_bytes([c[0], c[1]]);
+                let bits = u16::from_le_bytes(*c);
                 f16_to_f32(bits)
             })
             .collect(),
         ActivationDtype::BF16 => act
             .data
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| {
-                let bits = u16::from_le_bytes([c[0], c[1]]);
+                let bits = u16::from_le_bytes(*c);
                 f32::from_bits((bits as u32) << 16)
             })
             .collect(),
@@ -453,8 +459,10 @@ fn tensor_to_u32_ids(act: &ActivationData) -> Result<Vec<u32>> {
         ActivationDtype::F32 => {
             let ids: Vec<u32> = act
                 .data
-                .chunks_exact(4)
-                .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]) as u32)
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| f32::from_le_bytes(*c) as u32)
                 .collect();
             Ok(ids)
         }
