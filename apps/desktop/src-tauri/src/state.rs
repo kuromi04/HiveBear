@@ -62,13 +62,20 @@ impl AppState {
             }
         }
 
-        let mut config = self.config.lock().unwrap_or_else(|e| e.into_inner());
-        if !config.mesh.enabled {
-            config.mesh.enabled = true;
-            let _ = config.save();
+        let tier;
+        let coordination_server;
+        let port;
+        {
+            let mut config = self.config.lock().unwrap_or_else(|e| e.into_inner());
+            if !config.mesh.enabled {
+                config.mesh.enabled = true;
+                let _ = config.save();
+            }
+            tier = hivebear_mesh::MeshTier::from_str_lossy(&config.mesh.tier);
+            coordination_server = config.mesh.coordination_server.clone();
+            port = config.mesh.port;
         }
 
-        let tier = hivebear_mesh::MeshTier::from_str_lossy(&config.mesh.tier);
         let identity_path = self.paths.data_dir.join("node_identity.key");
         let identity = hivebear_mesh::NodeIdentity::load_or_generate(&identity_path)
             .map_err(|e| format!("Failed to load identity: {e}"))?;
@@ -81,9 +88,7 @@ impl AppState {
                 None,
             ));
         let discovery: Arc<dyn hivebear_mesh::discovery::PeerDiscovery> = Arc::new(
-            hivebear_mesh::discovery::server::CoordinationServerClient::new(
-                config.mesh.coordination_server.clone(),
-            ),
+            hivebear_mesh::discovery::server::CoordinationServerClient::new(coordination_server),
         );
 
         let reputation_path = Some(self.paths.data_dir.join("reputation.json"));
@@ -95,9 +100,9 @@ impl AppState {
             reputation_path,
         ));
 
-        let listen_addr: std::net::SocketAddr = format!("0.0.0.0:{}", config.mesh.port)
+        let listen_addr: std::net::SocketAddr = format!("0.0.0.0:{}", port)
             .parse()
-            .map_err(|e| format!("Invalid mesh port {}: {e}", config.mesh.port))?;
+            .map_err(|e| format!("Invalid mesh port {}: {e}", port))?;
         let total_vram: u64 = self.profile.gpus.iter().map(|g| g.vram_bytes).sum();
 
         let local_info = hivebear_mesh::PeerInfo {

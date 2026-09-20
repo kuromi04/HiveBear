@@ -68,16 +68,9 @@ pub struct MeshConnectionStatus {
 
 /// Start the mesh node: register with the coordination server and begin heartbeats.
 #[tauri::command]
-pub fn join_mesh(state: State<'_, AppState>) -> CmdResult<MeshConnectionStatus> {
-    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        state.start_mesh()
-    }));
-
-    match res {
-        Ok(Ok(())) => get_mesh_connection_status(state),
-        Ok(Err(err_msg)) => Err(err_msg),
-        Err(_) => Err("An unexpected error occurred while initializing the mesh transport".into()),
-    }
+pub async fn join_mesh(state: State<'_, AppState>) -> CmdResult<MeshConnectionStatus> {
+    state.start_mesh()?;
+    get_mesh_connection_status(state)
 }
 
 /// Stop the mesh node: deregister and disconnect.

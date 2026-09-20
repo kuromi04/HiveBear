@@ -59,7 +59,7 @@ export default function Sidebar() {
               <span className="text-sm font-bold tracking-tight text-text-primary">
                 HiveBear
               </span>
-              <span className="text-[10px] font-mono text-paw-500 font-semibold">
+              <span className="text-[10px] font-medium text-text-tertiary">
                 by kuromi04
               </span>
             </div>
