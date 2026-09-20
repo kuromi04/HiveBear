@@ -41,6 +41,7 @@ impl QuicTransport {
         if security_mode == MeshSecurityMode::Insecure {
             warn!("⚠️  Mesh security mode is INSECURE. Certificate verification is disabled. Do NOT use in production!");
         }
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let (inbox_tx, inbox_rx) = mpsc::unbounded_channel();
         Self {
             local_id,
@@ -239,11 +240,22 @@ impl MeshTransport for QuicTransport {
         let (server_config, client_config) =
             Self::generate_self_signed_config(self.security_mode, self.tofu_pins_path.clone())?;
 
-        let mut endpoint = Endpoint::server(server_config, addr)
-            .map_err(|e| MeshError::Transport(format!("bind: {e}")))?;
+        let mut endpoint = match Endpoint::server(server_config.clone(), addr) {
+            Ok(ep) => ep,
+            Err(e) => {
+                warn!("Failed to bind QUIC endpoint to {addr}: {e}. Retrying on ephemeral port (0.0.0.0:0)...");
+                let fallback_addr = SocketAddr::from(([0, 0, 0, 0], 0));
+                Endpoint::server(server_config, fallback_addr)
+                    .map_err(|e2| MeshError::Transport(format!("bind primary ({e}) and fallback ({e2}) failed")))?
+            }
+        };
         endpoint.set_default_client_config(client_config);
 
-        info!("Listening on {addr}");
+        if let Ok(local_addr) = endpoint.local_addr() {
+            info!("QUIC endpoint bound and listening on {local_addr}");
+        } else {
+            info!("QUIC endpoint listening on {addr}");
+        }
 
         let inbox_tx = self.inbox_tx.clone();
         let connections = self.connections.clone();
@@ -529,13 +541,14 @@ impl rustls::client::danger::ServerCertVerifier for TofuVerifier {
         cert: &rustls::pki_types::CertificateDer<'_>,
         dss: &rustls::DigitallySignedStruct,
     ) -> std::result::Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        let provider = rustls::crypto::CryptoProvider::get_default()
+            .cloned()
+            .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()));
         rustls::crypto::verify_tls12_signature(
             message,
             cert,
             dss,
-            &rustls::crypto::CryptoProvider::get_default()
-                .expect("no default CryptoProvider installed")
-                .signature_verification_algorithms,
+            &provider.signature_verification_algorithms,
         )
     }
 
@@ -545,13 +558,14 @@ impl rustls::client::danger::ServerCertVerifier for TofuVerifier {
         cert: &rustls::pki_types::CertificateDer<'_>,
         dss: &rustls::DigitallySignedStruct,
     ) -> std::result::Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        let provider = rustls::crypto::CryptoProvider::get_default()
+            .cloned()
+            .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()));
         rustls::crypto::verify_tls13_signature(
             message,
             cert,
             dss,
-            &rustls::crypto::CryptoProvider::get_default()
-                .expect("no default CryptoProvider installed")
-                .signature_verification_algorithms,
+            &provider.signature_verification_algorithms,
         )
     }
 
