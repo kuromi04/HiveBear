@@ -305,8 +305,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            ghcr.io/beckhamlabsllc/hivebear:${{ github.ref_name }}${{ matrix.tag_suffix }}
-            ghcr.io/beckhamlabsllc/hivebear:latest${{ matrix.tag_suffix }}
+            ghcr.io/kuromi04/hivebear:${{ github.ref_name }}${{ matrix.tag_suffix }}
+            ghcr.io/kuromi04/hivebear:latest${{ matrix.tag_suffix }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
