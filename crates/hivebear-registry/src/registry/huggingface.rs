@@ -177,12 +177,8 @@ fn hf_to_metadata(model: HfModelResponse) -> ModelMetadata {
         .or(model.model_id)
         .unwrap_or_else(|| "unknown-model".to_string());
 
-    let name = raw_id
-        .rsplit('/')
-        .next()
-        .unwrap_or(&raw_id)
-        .to_string();
-        
+    let name = raw_id.rsplit('/').next().unwrap_or(&raw_id).to_string();
+
     let tags = model.tags.clone().unwrap_or_default();
 
     // Try to extract param count from tags or name

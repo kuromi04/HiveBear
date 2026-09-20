@@ -104,7 +104,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state);
 
     let addr: SocketAddr = format!("{}:{}", args.bind, args.port).parse()?;
-    info!("🚀 HiveBear Coordination Server starting on http://{}", addr);
+    info!(
+        "🚀 HiveBear Coordination Server starting on http://{}",
+        addr
+    );
     info!("Author / Maintained by @kuromi04 & HiveBear Community");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -122,10 +125,7 @@ async fn health_check() -> Json<serde_json::Value> {
     }))
 }
 
-async fn register_node(
-    State(state): State<SharedState>,
-    Json(info): Json<PeerInfo>,
-) -> StatusCode {
+async fn register_node(State(state): State<SharedState>, Json(info): Json<PeerInfo>) -> StatusCode {
     let node_id = info.node_id.to_hex();
     info!("Registering node {} ({})", node_id, info.addr);
     state.nodes.insert(
@@ -222,7 +222,7 @@ async fn send_signal(
 ) -> StatusCode {
     let to_node = signal.to_node.clone();
     let val = serde_json::to_value(signal).unwrap();
-    
+
     // SECURITY FIX: Cap the number of signals to prevent Memory Leak / DoS
     let mut entry = state.signals.entry(to_node).or_default();
     if entry.len() < 50 {
@@ -263,14 +263,18 @@ async fn matchmake(
 ) -> Json<serde_json::Value> {
     let available_peers = state.nodes.len();
     let requester_karma = state.karma.get(&req.node_id).map(|k| *k).unwrap_or(0);
-    
+
     // Sort peers: prioritizing high-karma contributors first
-    let mut ranked_peers: Vec<_> = state.nodes.iter().map(|entry| {
-        let p = &entry.value().info;
-        let id = p.node_id.to_hex();
-        let peer_karma = state.karma.get(&id).map(|k| *k).unwrap_or(0);
-        (id, p.addr.to_string(), peer_karma)
-    }).collect();
+    let mut ranked_peers: Vec<_> = state
+        .nodes
+        .iter()
+        .map(|entry| {
+            let p = &entry.value().info;
+            let id = p.node_id.to_hex();
+            let peer_karma = state.karma.get(&id).map(|k| *k).unwrap_or(0);
+            (id, p.addr.to_string(), peer_karma)
+        })
+        .collect();
 
     ranked_peers.sort_by(|a, b| b.2.cmp(&a.2));
 
@@ -333,22 +337,31 @@ async fn claim_karma(
     Json(req): Json<ClaimKarmaRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let r = &req.receipt;
-    
+
     // 1. Anti-Replay verification
     let receipt_key = format!("{}:{}:{}", r.client_node_id, r.nonce, r.timestamp);
     if state.processed_receipts.contains_key(&receipt_key) {
-        return Err((StatusCode::CONFLICT, "Receipt already claimed (anti-replay check failed)".to_string()));
+        return Err((
+            StatusCode::CONFLICT,
+            "Receipt already claimed (anti-replay check failed)".to_string(),
+        ));
     }
 
     // 2. Client verification: check if client exists or has interacted recently
     let client_known = state.nodes.contains_key(&r.client_node_id);
     if !client_known && r.tokens_processed > 5000 {
-        return Err((StatusCode::FORBIDDEN, "Client node not recognized for high-token claims".to_string()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Client node not recognized for high-token claims".to_string(),
+        ));
     }
 
     // 3. Rate-limit / Cap per claim: prevent rogue node claiming millions in one shot
     if r.tokens_processed == 0 || r.tokens_processed > 100_000 {
-        return Err((StatusCode::BAD_REQUEST, "Invalid token range in work receipt".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid token range in work receipt".to_string(),
+        ));
     }
 
     // 4. Calculate Karma (1 token = 1 Karma point)
@@ -402,4 +415,3 @@ async fn dashboard(State(state): State<SharedState>) -> Json<serde_json::Value> 
         "nodes": peer_list,
     }))
 }
-

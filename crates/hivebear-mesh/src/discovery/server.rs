@@ -365,7 +365,10 @@ impl CoordinationServerClient {
         let url = format!("{}/karma/balance?node_id={}", self.base_url, node_id);
         match self.http.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
-                let json: serde_json::Value = resp.json().await.map_err(|e| MeshError::Discovery(e.to_string()))?;
+                let json: serde_json::Value = resp
+                    .json()
+                    .await
+                    .map_err(|e| MeshError::Discovery(e.to_string()))?;
                 Ok(json.get("karma").and_then(|k| k.as_i64()).unwrap_or(0))
             }
             _ => Ok(0),
@@ -405,11 +408,19 @@ impl CoordinationServerClient {
             .map_err(|e| MeshError::Discovery(format!("Claim karma network error: {e}")))?;
 
         if resp.status().is_success() {
-            let json: serde_json::Value = resp.json().await.map_err(|e| MeshError::Discovery(e.to_string()))?;
-            Ok(json.get("new_balance").and_then(|b| b.as_i64()).unwrap_or(0))
+            let json: serde_json::Value = resp
+                .json()
+                .await
+                .map_err(|e| MeshError::Discovery(e.to_string()))?;
+            Ok(json
+                .get("new_balance")
+                .and_then(|b| b.as_i64())
+                .unwrap_or(0))
         } else {
             let err_msg = resp.text().await.unwrap_or_default();
-            Err(MeshError::Discovery(format!("Claim karma rejected: {err_msg}")))
+            Err(MeshError::Discovery(format!(
+                "Claim karma rejected: {err_msg}"
+            )))
         }
     }
 }

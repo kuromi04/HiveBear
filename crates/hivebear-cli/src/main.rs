@@ -2754,7 +2754,10 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
     println!();
 
     // Fetch live Karma balance
-    let karma_balance = coordinator.get_karma_balance(&node_id_hex).await.unwrap_or(0);
+    let karma_balance = coordinator
+        .get_karma_balance(&node_id_hex)
+        .await
+        .unwrap_or(0);
     let karma_tier = if karma_balance >= 500 {
         "VIP_ALPHA (Priority Queue: Tier 1)".cyan().bold()
     } else if karma_balance > 0 {
@@ -2781,7 +2784,12 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
         "Contributing:".bold(),
         plan.estimated_tflops
     );
-    println!("  {} {} pts [{}]", "Karma Balance:".bold(), karma_balance, karma_tier);
+    println!(
+        "  {} {} pts [{}]",
+        "Karma Balance:".bold(),
+        karma_balance,
+        karma_tier
+    );
     println!();
     println!(
         "  {}",

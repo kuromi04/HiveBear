@@ -42,6 +42,7 @@
 - 📥 **HF Nested Path Download Fix:** Resolved `OS error 3` path errors when downloading HuggingFace models with subdirectories (`Q4_K_M/model.gguf`).
 - ⚡ **Resilient Stream Downloads:** Added automatic reconnect and chunk resume logic with HTTP `Range` headers.
 - 💬 **Chat Persistence:** Conversations persist across app restarts and tab navigation with SQLite.
+- 🤖 **Chat with AI Models:** Built-in chat interface to talk directly with distributed LLMs locally and across the mesh network.
 
 ---
 

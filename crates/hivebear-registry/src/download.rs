@@ -130,7 +130,7 @@ impl DownloadManager {
         progress_cb: Option<&(dyn Fn(DownloadProgress) + Send + Sync)>,
     ) -> Result<PathBuf> {
         let final_path = dest_dir.join(filename);
-        
+
         if let Some(parent) = final_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         } else {
@@ -241,7 +241,9 @@ impl DownloadManager {
 
             max_stream_retries -= 1;
             if max_stream_retries == 0 {
-                return Err(RegistryError::DownloadError("Max stream retries exceeded".to_string()));
+                return Err(RegistryError::DownloadError(
+                    "Max stream retries exceeded".to_string(),
+                ));
             }
 
             // Wait a moment before resuming

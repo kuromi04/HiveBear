@@ -245,8 +245,9 @@ impl MeshTransport for QuicTransport {
             Err(e) => {
                 warn!("Failed to bind QUIC endpoint to {addr}: {e}. Retrying on ephemeral port (0.0.0.0:0)...");
                 let fallback_addr = SocketAddr::from(([0, 0, 0, 0], 0));
-                Endpoint::server(server_config, fallback_addr)
-                    .map_err(|e2| MeshError::Transport(format!("bind primary ({e}) and fallback ({e2}) failed")))?
+                Endpoint::server(server_config, fallback_addr).map_err(|e2| {
+                    MeshError::Transport(format!("bind primary ({e}) and fallback ({e2}) failed"))
+                })?
             }
         };
         endpoint.set_default_client_config(client_config);
