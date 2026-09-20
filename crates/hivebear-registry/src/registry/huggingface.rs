@@ -418,14 +418,15 @@ mod tests {
     #[test]
     fn test_hf_to_metadata() {
         let response = HfModelResponse {
-            model_id: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF".into(),
-            tags: vec!["gguf".into(), "llama".into()],
-            downloads: 50000,
-            likes: 200,
-            siblings: vec![HfSibling {
+            id: None,
+            model_id: Some("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF".into()),
+            tags: Some(vec!["gguf".into(), "llama".into()]),
+            downloads: Some(50000),
+            likes: Some(200),
+            siblings: Some(vec![HfSibling {
                 filename: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf".into(),
                 size: Some(4_500_000_000),
-            }],
+            }]),
             last_modified: None,
         };
 
