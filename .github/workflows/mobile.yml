@@ -52,8 +52,8 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Install Android NDK
-        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006"
+      - name: Install Android NDK and SDK components
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Install frontend dependencies
         run: |
@@ -71,19 +71,20 @@ jobs:
       - name: Build Android APK
         env:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.1.12297006
-          CC_aarch64_linux_android: aarch64-linux-android24-clang
-          CC_armv7_linux_androideabi: armv7a-linux-androideabi24-clang
-          CC_i686_linux_android: i686-linux-android24-clang
-          CC_x86_64_linux_android: x86_64-linux-android24-clang
-          AR_aarch64_linux_android: llvm-ar
-          AR_armv7_linux_androideabi: llvm-ar
-          AR_i686_linux_android: llvm-ar
-          AR_x86_64_linux_android: llvm-ar
         run: |
-          export PATH="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          TC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export PATH="$TC:$PATH"
+          export CC_aarch64_linux_android="$TC/aarch64-linux-android24-clang"
+          export CC_armv7_linux_androideabi="$TC/armv7a-linux-androideabi24-clang"
+          export CC_i686_linux_android="$TC/i686-linux-android24-clang"
+          export CC_x86_64_linux_android="$TC/x86_64-linux-android24-clang"
+          export AR_aarch64_linux_android="$TC/llvm-ar"
+          export AR_armv7_linux_androideabi="$TC/llvm-ar"
+          export AR_i686_linux_android="$TC/llvm-ar"
+          export AR_x86_64_linux_android="$TC/llvm-ar"
           cd apps/desktop
           sed -i 's/default = \[.*\]/default = \[\]/' src-tauri/Cargo.toml
-          cargo tauri android build --features mobile
+          cargo tauri android build --apk --ci --verbose --features mobile
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
