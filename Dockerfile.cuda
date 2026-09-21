@@ -41,7 +41,9 @@ ENV HIVEBEAR_DATA_DIR=/data
 VOLUME /data
 
 # Create non-root user for security
-RUN groupadd -r hivebear && useradd -r -g hivebear -d /data -s /sbin/nologin hivebear \
+RUN mkdir -p /data \
+    && groupadd -r hivebear \
+    && useradd -r -g hivebear -d /data -s /bin/false hivebear \
     && chown -R hivebear:hivebear /data
 
 USER hivebear
