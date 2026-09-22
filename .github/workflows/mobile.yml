@@ -101,13 +101,18 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
+          cd ../..
+          mkdir -p android-artifacts
+          find . -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} android-artifacts/ \;
+          echo "=== Found Android Build Artifacts ==="
+          ls -lh android-artifacts/
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-apk
-          path: |
-            apps/desktop/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          path: android-artifacts/*
+          if-no-files-found: error
 
   upload-android-assets:
     name: Upload Android Assets to Release
@@ -130,10 +135,14 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           mkdir -p release
-          find artifacts -name "*.apk" -exec cp {} release/ \;
+          find artifacts -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} release/ \;
           cd release
-          # Create stable-named copy for website download
-          for f in *universal*.apk; do [ -f "$f" ] && cp "$f" HiveBear.apk; done
+          for f in *universal*.apk *.apk; do
+            if [ -f "$f" ]; then
+              cp "$f" HiveBear.apk
+              break
+            fi
+          done
           sha256sum * > SHA256SUMS-android.txt
 
       - name: Upload Android assets to release
