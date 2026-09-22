@@ -93,7 +93,14 @@ jobs:
           ln -sf "$TC/x86_64-linux-android24-clang" "$TC/x86_64-linux-android-clang" || true
           cd apps/desktop
           sed -i 's/default = \[.*\]/default = \[\]/' src-tauri/Cargo.toml
-          cargo tauri android build --apk --ci --verbose --features mobile
+          export RUST_BACKTRACE=1
+          if ! cargo tauri android build --apk --ci --verbose --features mobile 2>&1 | tee /tmp/android_build.log; then
+            echo "## ❌ Android Build Failure Summary" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            tail -n 120 /tmp/android_build.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
