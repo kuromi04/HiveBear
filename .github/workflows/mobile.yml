@@ -52,8 +52,8 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Install Android NDK and SDK components
-        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Android SDK components
+        run: sudo $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Install frontend dependencies
         run: |
@@ -70,9 +70,12 @@ jobs:
 
       - name: Build Android APK
         env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.1.12297006
+          NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
         run: |
           set -o pipefail
+          export NDK_HOME="${NDK_HOME:-${ANDROID_NDK_HOME:-$ANDROID_NDK_ROOT}}"
+          echo "Configured NDK_HOME: $NDK_HOME"
+          test -d "$NDK_HOME" || { echo "Error: NDK_HOME not found at $NDK_HOME"; exit 1; }
           TC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export PATH="$TC:$PATH"
           export CC_aarch64_linux_android="$TC/aarch64-linux-android24-clang"
