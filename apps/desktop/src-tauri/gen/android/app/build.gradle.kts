@@ -24,6 +24,23 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        create("release") {
+            val ksFile = if (file("release.keystore").exists()) {
+                file("release.keystore")
+            } else if (rootProject.file("../../../packaging/android/release.keystore").exists()) {
+                rootProject.file("../../../packaging/android/release.keystore")
+            } else {
+                null
+            }
+            if (ksFile != null && ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "hivebear123"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "hivebear"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "hivebear123"
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -37,7 +54,13 @@ android {
             }
         }
         getByName("release") {
-            isMinifyEnabled = true
+            val hasReleaseKey = signingConfigs.getByName("release").storeFile != null
+            if (hasReleaseKey) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+            isMinifyEnabled = false
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))

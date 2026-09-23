@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Tauri & JNI bindings
+-keep class app.tauri.** { *; }
+-keep class com.hivebear.app.** { *; }
+-keepclassmembers class * {
+    native <methods>;
+}

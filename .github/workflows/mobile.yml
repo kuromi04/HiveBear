@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to upload assets to (e.g. v0.2.14)'
+        required: false
+        default: 'v0.2.14'
 
 permissions:
   contents: read
@@ -95,6 +100,13 @@ jobs:
           ln -sf "$TC/armv7a-linux-androideabi24-clang" "$TC/arm-linux-androideabi-clang" || true
           ln -sf "$TC/i686-linux-android24-clang" "$TC/i686-linux-android-clang" || true
           ln -sf "$TC/x86_64-linux-android24-clang" "$TC/x86_64-linux-android-clang" || true
+
+          # Ensure keystore is copied into app folder if present
+          mkdir -p apps/desktop/src-tauri/gen/android/app
+          if [ -f packaging/android/release.keystore ]; then
+            cp packaging/android/release.keystore apps/desktop/src-tauri/gen/android/app/release.keystore
+          fi
+
           cd apps/desktop
           sed -i 's/default = \[.*\]/default = \[\]/' src-tauri/Cargo.toml
           export RUST_BACKTRACE=1
@@ -110,7 +122,45 @@ jobs:
           cd ../..
           mkdir -p android-artifacts
           find . -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} android-artifacts/ \;
-          echo "=== Found Android Build Artifacts ==="
+
+          echo "=== Processing and Signing Android APKs ==="
+          BUILD_TOOLS_DIR="$ANDROID_HOME/build-tools/35.0.0"
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
+          KEYSTORE="$PWD/packaging/android/release.keystore"
+
+          cd android-artifacts
+          for apk in *.apk; do
+            [ -f "$apk" ] || continue
+            echo "Processing $apk..."
+
+            # Rename unsigned apk to clean name
+            CLEAN_NAME="${apk//-unsigned/}"
+            if [ "$CLEAN_NAME" != "$apk" ]; then
+              mv "$apk" "$CLEAN_NAME"
+              apk="$CLEAN_NAME"
+            fi
+
+            # Check alignment
+            if ! $ZIPALIGN -c 4 "$apk"; then
+              echo "Aligning $apk..."
+              $ZIPALIGN -f -p 4 "$apk" "${apk}.aligned"
+              mv "${apk}.aligned" "$apk"
+            fi
+
+            # Sign if not verified
+            if ! $APKSIGNER verify "$apk" 2>/dev/null; then
+              echo "Signing $apk with $KEYSTORE..."
+              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:hivebear123 --key-pass pass:hivebear123 --ks-key-alias hivebear "$apk"
+            fi
+
+            # Verify signature strictly
+            echo "Strict signature verification for $apk:"
+            $APKSIGNER verify --verbose "$apk"
+          done
+          cd ..
+
+          echo "=== Found Signed Android Build Artifacts ==="
           ls -lh android-artifacts/
 
       - name: Upload APK artifacts
@@ -125,7 +175,7 @@ jobs:
     permissions:
       contents: write
     needs: [build-android]
-    if: ${{ startsWith(github.ref, 'refs/tags/v') && !cancelled() && needs.build-android.result == 'success' }}
+    if: ${{ !cancelled() && needs.build-android.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -137,14 +187,17 @@ jobs:
 
       - name: Collect APK assets
         env:
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ github.event.inputs.tag_name || github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
           mkdir -p release
           find artifacts -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} release/ \;
           cd release
+          for f in *-unsigned*.apk; do
+            [ -f "$f" ] && mv "$f" "${f//-unsigned/}"
+          done
           for f in *universal*.apk *.apk; do
-            if [ -f "$f" ]; then
+            if [ -f "$f" ] && [ "$f" != "HiveBear.apk" ]; then
               cp "$f" HiveBear.apk
               break
             fi
@@ -154,7 +207,8 @@ jobs:
       - name: Upload Android assets to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ github.event.inputs.tag_name || github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
           gh release upload "$TAG_NAME" release/* --repo "$REPO" --clobber
+
