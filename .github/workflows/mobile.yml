@@ -72,6 +72,7 @@ jobs:
         env:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.1.12297006
         run: |
+          set -o pipefail
           TC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export PATH="$TC:$PATH"
           export CC_aarch64_linux_android="$TC/aarch64-linux-android24-clang"
@@ -97,8 +98,10 @@ jobs:
           if ! cargo tauri android build --apk --ci --verbose --features mobile 2>&1 | tee /tmp/android_build.log; then
             echo "## ❌ Android Build Failure Summary" >> $GITHUB_STEP_SUMMARY
             echo '```text' >> $GITHUB_STEP_SUMMARY
-            tail -n 120 /tmp/android_build.log >> $GITHUB_STEP_SUMMARY
+            tail -n 150 /tmp/android_build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "=== FULL ANDROID BUILD LOG ==="
+            cat /tmp/android_build.log
             exit 1
           fi
           cd ../..
