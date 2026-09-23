@@ -21,11 +21,20 @@
 <p align="center">
   <a href="https://github.com/kuromi04/TermuxHiveBear"><img src="https://img.shields.io/badge/Termux-Supported-brightgreen?logo=android" alt="Termux Support" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
-  <img src="https://img.shields.io/badge/version-0.2.0--patched-orange.svg" alt="Version 0.2.0" />
+  <a href="https://github.com/kuromi04/HiveBear/releases/tag/v0.2.14"><img src="https://img.shields.io/badge/release-v0.2.14-cyan.svg" alt="Latest Release" /></a>
+  <a href="https://kuromi04.github.io/HiveBear/"><img src="https://img.shields.io/badge/Official%20Website-Online-ff007f.svg" alt="Official Website" /></a>
 </p>
 
 <p align="center">
-  <a href="#english">🇬🇧 English</a> | <a href="#español">🇪🇸 Español</a> | <a href="docs/HOW_IT_WORKS.md">🧠 Cómo Funciona / How it Works</a>
+  <strong>Direct Downloads (v0.2.14):</strong><br>
+  <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64-setup.exe"><img src="https://img.shields.io/badge/Windows-Download%20.exe-0078D6?logo=windows&logoColor=white" alt="Download Windows .exe" /></a>
+  <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.dmg"><img src="https://img.shields.io/badge/macOS-Download%20.dmg-000000?logo=apple&logoColor=white" alt="Download macOS .dmg" /></a>
+  <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x86_64.AppImage"><img src="https://img.shields.io/badge/Linux-Download%20.AppImage-FCC624?logo=linux&logoColor=black" alt="Download Linux .AppImage" /></a>
+  <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.apk"><img src="https://img.shields.io/badge/Android-Download%20APK-3DDC84?logo=android&logoColor=white" alt="Download Android APK" /></a>
+</p>
+
+<p align="center">
+  <a href="#english">🇬🇧 English</a> | <a href="#español">🇪🇸 Español</a> | <a href="https://kuromi04.github.io/HiveBear/">🌐 Web Oficial</a> | <a href="docs/HOW_IT_WORKS.md">🧠 Cómo Funciona</a>
 </p>
 
 ---
