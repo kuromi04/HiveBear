@@ -3,50 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HiveBear - Decentralized P2P AI Mesh Network by @kuromi04</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <title>HiveBear - Red P2P Descentralizada de Inteligencia Artificial por @kuromi04</title>
+    <meta name="description" content="HiveBear es una red P2P colaborativa de IA escrita en Rust. Inferencia distribuida, privacidad total QUIC, sistema de Karma justo y compatibilidad con Windows, Mac, Linux y Android.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #08080c;
-            --text-color: #e4e4eb;
-            --text-muted: #9494a8;
-            --cyan: #00ffff;
-            --cyan-glow: rgba(0, 255, 255, 0.4);
-            --magenta: #ff007f;
-            --magenta-glow: rgba(255, 0, 127, 0.4);
-            --dark-panel: #0e0e16;
-            --card-bg: #13131d;
-            --border: #242436;
-            --code-bg: #050508;
+            --bg-base: #07080e;
+            --bg-surface: #0e101a;
+            --bg-surface-elevated: #141724;
+            --bg-card: rgba(18, 22, 34, 0.75);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(0, 245, 212, 0.35);
+            
+            --text-main: #f0f2f8;
+            --text-secondary: #9aa1b5;
+            --text-tertiary: #6b7280;
+            
+            --cyan: #00f5d4;
+            --cyan-glow: rgba(0, 245, 212, 0.3);
+            --cyan-dark: #00bfa5;
+            --magenta: #f72585;
+            --magenta-glow: rgba(247, 37, 133, 0.3);
+            --purple: #7209b7;
+            --blue: #4361ee;
+            --green: #10b981;
+            
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-full: 9999px;
+            
+            --transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
         }
 
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            padding: 0;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             line-height: 1.6;
             overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* Ambient Glow Background */
-        .ambient-bg {
+        /* Ambient Lighting */
+        .ambient-canvas {
             position: fixed;
             top: 0;
             left: 50%;
             transform: translateX(-50%);
             width: 100vw;
             height: 100vh;
-            background: 
-                radial-gradient(circle at 20% 20%, rgba(0, 255, 255, 0.05) 0%, transparent 40%),
-                radial-gradient(circle at 80% 30%, rgba(255, 0, 127, 0.04) 0%, transparent 40%);
             pointer-events: none;
             z-index: 0;
+            background: 
+                radial-gradient(circle at 15% 15%, rgba(0, 245, 212, 0.07) 0%, transparent 45%),
+                radial-gradient(circle at 85% 25%, rgba(247, 37, 133, 0.06) 0%, transparent 50%),
+                radial-gradient(circle at 50% 75%, rgba(67, 97, 238, 0.05) 0%, transparent 60%);
+        }
+
+        /* Layout Container */
+        .container {
+            width: 100%;
+            max-width: 1160px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4 {
+            color: #fff;
+            letter-spacing: -0.025em;
+            font-weight: 800;
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #ffffff 30%, var(--cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .gradient-magenta {
+            background: linear-gradient(135deg, #ffffff 20%, var(--magenta) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         /* Navbar */
@@ -54,879 +107,1592 @@
             position: sticky;
             top: 0;
             width: 100%;
-            background: rgba(8, 8, 12, 0.85);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            background: rgba(7, 8, 14, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-subtle);
             z-index: 100;
+            transition: var(--transition);
         }
 
-        .nav-logo {
-            font-weight: 800;
-            font-size: 1.3rem;
-            color: #fff;
-            text-decoration: none;
+        .nav-inner {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            justify-content: space-between;
+            height: 72px;
         }
 
-        .nav-logo span { color: var(--cyan); }
-        .nav-tag {
-            font-size: 0.75rem;
-            background: rgba(0, 255, 255, 0.1);
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: #fff;
+        }
+
+        .nav-brand-logo {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, var(--cyan), var(--blue));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px var(--cyan-glow);
+            font-size: 1.2rem;
+        }
+
+        .nav-brand-title {
+            font-weight: 800;
+            font-size: 1.25rem;
+            letter-spacing: -0.5px;
+        }
+
+        .nav-author-badge {
+            font-size: 0.72rem;
+            font-weight: 600;
+            background: rgba(247, 37, 133, 0.12);
+            color: var(--magenta);
+            border: 1px solid rgba(247, 37, 133, 0.3);
+            padding: 0.15rem 0.5rem;
+            border-radius: var(--radius-full);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .nav-version {
+            font-size: 0.72rem;
             color: var(--cyan);
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            border: 1px solid rgba(0, 255, 255, 0.3);
+            background: rgba(0, 245, 212, 0.1);
+            border: 1px solid rgba(0, 245, 212, 0.3);
+            padding: 0.15rem 0.45rem;
+            border-radius: var(--radius-full);
             font-family: 'JetBrains Mono', monospace;
         }
 
         .nav-links {
             display: flex;
-            gap: 1.5rem;
             align-items: center;
+            gap: 2rem;
         }
 
         .nav-links a {
-            color: var(--text-muted);
+            color: var(--text-secondary);
             text-decoration: none;
-            font-size: 0.95rem;
+            font-size: 0.92rem;
             font-weight: 500;
-            transition: color 0.2s ease;
+            transition: var(--transition);
         }
 
         .nav-links a:hover {
-            color: var(--cyan);
+            color: #fff;
         }
 
-        /* Hero */
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .btn-nav-download {
+            background: var(--cyan);
+            color: #05060a !important;
+            font-weight: 700 !important;
+            padding: 0.55rem 1.15rem;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            font-size: 0.88rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            box-shadow: 0 0 15px rgba(0, 245, 212, 0.25);
+            transition: var(--transition);
+        }
+
+        .btn-nav-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 245, 212, 0.45);
+        }
+
+        /* Hero Section */
         .hero {
-            position: relative;
+            padding: 5.5rem 0 3.5rem 0;
             text-align: center;
-            padding: 5rem 1.5rem 3rem 1.5rem;
-            z-index: 1;
+            position: relative;
         }
 
-        .badge-live {
+        .hero-tag {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            background: rgba(0, 255, 255, 0.08);
-            border: 1px solid rgba(0, 255, 255, 0.3);
+            background: rgba(0, 245, 212, 0.08);
+            border: 1px solid rgba(0, 245, 212, 0.25);
             color: var(--cyan);
-            padding: 0.4rem 1rem;
-            border-radius: 50px;
-            font-size: 0.85rem;
+            padding: 0.35rem 0.95rem;
+            border-radius: var(--radius-full);
+            font-size: 0.82rem;
             font-weight: 600;
             font-family: 'JetBrains Mono', monospace;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.8rem;
         }
 
-        .pulse-dot {
+        .pulse-live {
             width: 8px;
             height: 8px;
-            background: #00ff88;
             border-radius: 50%;
-            box-shadow: 0 0 10px #00ff88;
-            animation: blink 1.5s infinite;
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+            animation: pulse-ring 1.8s infinite;
         }
 
-        @keyframes blink {
+        @keyframes pulse-ring {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.4; transform: scale(0.85); }
         }
 
-        .neon-title {
-            font-size: 4.5rem;
-            margin: 0;
-            font-weight: 800;
-            letter-spacing: -1px;
-            color: #fff;
-            text-shadow: 0 0 20px var(--cyan-glow);
+        .hero-title {
+            font-size: clamp(2.5rem, 5.5vw, 4.4rem);
             line-height: 1.1;
+            max-width: 900px;
+            margin: 0 auto 1.4rem auto;
+            letter-spacing: -1.5px;
         }
 
-        .neon-subtitle {
-            font-size: 1.4rem;
-            margin: 0.8rem 0;
-            font-family: 'JetBrains Mono', monospace;
-            color: var(--magenta);
-            text-shadow: 0 0 15px var(--magenta-glow);
-        }
-
-        .hero-desc {
+        .hero-subtitle {
+            font-size: clamp(1.05rem, 2vw, 1.25rem);
+            color: var(--text-secondary);
             max-width: 680px;
-            margin: 1.2rem auto 2.5rem auto;
-            color: var(--text-muted);
-            font-size: 1.15rem;
-        }
-
-        .banner-container {
-            max-width: 860px;
-            margin: 0 auto;
-            border-radius: 16px;
-            padding: 4px;
-            background: linear-gradient(135deg, rgba(0,255,255,0.4), rgba(255,0,127,0.4));
-            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.6);
-        }
-
-        .banner-container img {
-            width: 100%;
-            display: block;
-            border-radius: 14px;
-        }
-
-        /* Container */
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 3rem 1.5rem;
-            position: relative;
-            z-index: 1;
-        }
-
-        /* CTA Buttons */
-        .cta-group {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin: 3rem 0;
-        }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.6rem;
-            padding: 0.9rem 1.8rem;
-            border-radius: 8px;
-            font-weight: 600;
-            text-decoration: none;
-            transition: all 0.25s ease;
-            font-size: 0.95rem;
-        }
-
-        .btn-primary {
-            background: var(--cyan);
-            color: #000;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 25px rgba(0, 255, 255, 0.5);
-        }
-
-        .btn-outline {
-            background: transparent;
-            color: var(--text-color);
-            border: 1px solid var(--border);
-        }
-
-        .btn-outline:hover {
-            border-color: var(--cyan);
-            color: var(--cyan);
-            transform: translateY(-2px);
-        }
-
-        /* Philosophy Cards */
-        .quote-box {
-            background: var(--dark-panel);
-            border-left: 4px solid var(--cyan);
-            border-radius: 0 12px 12px 0;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            font-style: italic;
-            border: 1px solid var(--border);
-            border-left-width: 4px;
-            border-left-color: var(--cyan);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        .quote-box-es {
-            border-left-color: var(--magenta);
-        }
-
-        .quote-box strong {
-            color: #fff;
-            font-style: normal;
-        }
-
-        /* Feature Cards */
-        .section-title {
-            text-align: center;
-            font-size: 2.2rem;
-            font-weight: 800;
-            margin: 4rem 0 2rem 0;
-            background: linear-gradient(90deg, #fff, var(--cyan));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 2rem;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .card:hover {
-            border-color: rgba(0, 255, 255, 0.4);
-            transform: translateY(-4px);
-            box-shadow: 0 10px 30px rgba(0, 255, 255, 0.08);
-        }
-
-        .card-icon {
-            font-size: 2rem;
-            margin-bottom: 1rem;
-            display: inline-block;
-        }
-
-        .card h3 {
-            margin: 0 0 0.8rem 0;
-            font-size: 1.3rem;
-            color: #fff;
-        }
-
-        .card p {
-            margin: 0;
-            color: var(--text-muted);
-            font-size: 0.95rem;
+            margin: 0 auto 2.5rem auto;
             line-height: 1.6;
         }
 
-        /* Code Terminal */
-        .terminal-box {
-            background: var(--code-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-            margin: 2rem 0;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.5);
-        }
-
-        .terminal-header {
-            background: #11111a;
-            padding: 0.7rem 1.2rem;
+        /* Smart CTA Area */
+        .hero-cta-wrapper {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
             align-items: center;
-            border-bottom: 1px solid var(--border);
+            gap: 1.2rem;
+            margin-bottom: 3.5rem;
         }
 
-        .terminal-dots {
+        .hero-cta-buttons {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-smart-primary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            background: linear-gradient(135deg, var(--cyan) 0%, #00d2b4 100%);
+            color: #07080d;
+            font-weight: 700;
+            font-size: 1.05rem;
+            padding: 0.95rem 2rem;
+            border-radius: var(--radius-md);
+            text-decoration: none;
+            box-shadow: 0 8px 30px rgba(0, 245, 212, 0.35);
+            transition: var(--transition);
+        }
+
+        .btn-smart-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(0, 245, 212, 0.5);
+            background: linear-gradient(135deg, #33f8dc 0%, #00f5d4 100%);
+        }
+
+        .btn-smart-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+            border: 1px solid var(--border-subtle);
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 0.95rem 1.6rem;
+            border-radius: var(--radius-md);
+            text-decoration: none;
+            transition: var(--transition);
+            backdrop-filter: blur(8px);
+        }
+
+        .btn-smart-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            transform: translateY(-2px);
+        }
+
+        .hero-cta-sublink {
+            font-size: 0.88rem;
+            color: var(--text-tertiary);
+        }
+
+        .hero-cta-sublink a {
+            color: var(--cyan);
+            text-decoration: none;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .hero-cta-sublink a:hover {
+            text-decoration: underline;
+        }
+
+        /* Product Showcase Visual */
+        .hero-mockup-frame {
+            max-width: 960px;
+            margin: 0 auto;
+            position: relative;
+            border-radius: var(--radius-lg);
+            background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.02) 100%);
+            padding: 1px;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 245, 212, 0.08);
+        }
+
+        .hero-mockup-inner {
+            background: var(--bg-surface);
+            border-radius: calc(var(--radius-lg) - 1px);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .mockup-topbar {
+            height: 38px;
+            background: #0b0c14;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1rem;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .mockup-dots {
             display: flex;
             gap: 6px;
         }
 
-        .dot {
+        .mockup-dot {
             width: 10px;
             height: 10px;
             border-radius: 50%;
         }
 
-        .dot-red { background: #ff5f56; }
-        .dot-yellow { background: #ffbd2e; }
-        .dot-green { background: #27c93f; }
+        .dot-close { background: #ff5f56; }
+        .dot-min { background: #ffbd2e; }
+        .dot-max { background: #27c93f; }
 
-        .terminal-title {
-            font-size: 0.8rem;
-            color: #777;
+        .mockup-title {
+            font-size: 0.76rem;
+            color: var(--text-tertiary);
             font-family: 'JetBrains Mono', monospace;
         }
 
-        .terminal-content {
-            padding: 1.5rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.95rem;
-            color: #00ff88;
-            overflow-x: auto;
-            white-space: pre;
+        .hero-banner-img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-bottom-left-radius: calc(var(--radius-lg) - 1px);
+            border-bottom-right-radius: calc(var(--radius-lg) - 1px);
+        }
+
+        /* Floating Feature Badges over visual */
+        .floating-chips {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
             display: flex;
-            justify-content: space-between;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 90%;
+            pointer-events: none;
+        }
+
+        .floating-chip {
+            background: rgba(14, 16, 26, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 0.45rem 0.95rem;
+            border-radius: var(--radius-full);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
             align-items: center;
+            gap: 0.45rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
         }
 
-        .copy-btn {
-            background: rgba(255,255,255,0.08);
-            border: 1px solid var(--border);
-            color: #aaa;
-            padding: 0.4rem 0.8rem;
-            border-radius: 6px;
-            font-size: 0.75rem;
-            cursor: pointer;
-            font-family: 'Inter', sans-serif;
-            transition: all 0.2s;
+        /* Proof Stats Bar */
+        .stats-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin: 4.5rem 0;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 1.8rem 2rem;
         }
 
-        .copy-btn:hover {
-            background: var(--cyan);
-            color: #000;
-        }
-
-        /* Footer */
-        footer {
-            border-top: 1px solid var(--border);
-            padding: 3rem 1.5rem;
+        .stat-item {
             text-align: center;
-            color: #666;
-            font-size: 0.9rem;
-            margin-top: 5rem;
+            border-right: 1px solid var(--border-subtle);
         }
 
-        footer a {
+        .stat-item:last-child {
+            border-right: none;
+        }
+
+        .stat-value {
+            font-size: 1.9rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.3rem;
+        }
+
+        .stat-label {
+            font-size: 0.84rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* Section Headers */
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.8rem;
+            font-weight: 700;
             color: var(--cyan);
-            text-decoration: none;
+            background: rgba(0, 245, 212, 0.1);
+            border: 1px solid rgba(0, 245, 212, 0.25);
+            padding: 0.3rem 0.8rem;
+            border-radius: var(--radius-full);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.8rem;
+            font-family: 'JetBrains Mono', monospace;
         }
 
-        @media (max-width: 768px) {
-            .neon-title { font-size: 3rem; }
-            .navbar { padding: 1rem; }
+        .section-title {
+            font-size: clamp(1.8rem, 3.5vw, 2.7rem);
+            margin-bottom: 0.8rem;
         }
 
-        /* Downloads Section */
-        .downloads-section {
-            margin: 3.5rem 0 4rem 0;
+        .section-desc {
+            max-width: 620px;
+            margin: 0 auto;
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+        }
+
+        /* Bento Grid */
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 5rem;
+        }
+
+        .bento-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition);
+            backdrop-filter: blur(8px);
+        }
+
+        .bento-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0, 245, 212, 0.3);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 245, 212, 0.05);
+        }
+
+        .bento-card.span-2 {
+            grid-column: span 2;
+        }
+
+        .bento-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: var(--radius-sm);
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            margin-bottom: 1.3rem;
+            color: var(--cyan);
+        }
+
+        .bento-title {
+            font-size: 1.25rem;
+            margin-bottom: 0.6rem;
+            color: #fff;
+        }
+
+        .bento-desc {
+            color: var(--text-secondary);
+            font-size: 0.94rem;
+            line-height: 1.6;
+        }
+
+        .bento-tag-pill {
+            align-self: flex-start;
+            margin-top: auto;
+            padding-top: 1.2rem;
+            font-size: 0.74rem;
+            color: var(--cyan);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+
+        /* 3-Step Process */
+        .process-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 5rem;
             position: relative;
         }
 
-        .downloads-header {
-            text-align: center;
+        .process-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 2rem 1.8rem;
+            position: relative;
+        }
+
+        .process-step-num {
+            font-size: 3rem;
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.06);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .process-title {
+            font-size: 1.15rem;
+            margin-bottom: 0.5rem;
+            color: #fff;
+        }
+
+        .process-desc {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.55;
+        }
+
+        /* UNIFIED DOWNLOAD HUB (Main Redesign Piece) */
+        .download-hub {
+            margin: 5rem 0 6rem 0;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 3rem;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+        }
+
+        .hub-tabs-container {
+            display: flex;
+            justify-content: center;
             margin-bottom: 2.5rem;
         }
 
-        .downloads-badge {
+        .hub-tabs {
+            display: inline-flex;
+            background: #090a12;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-full);
+            padding: 5px;
+            gap: 4px;
+            overflow-x: auto;
+            max-width: 100%;
+        }
+
+        .hub-tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 0.65rem 1.4rem;
+            border-radius: var(--radius-full);
+            font-size: 0.92rem;
+            font-weight: 600;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            cursor: pointer;
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            background: rgba(0, 255, 255, 0.1);
-            color: var(--cyan);
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            padding: 0.35rem 0.9rem;
-            border-radius: 50px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            font-family: 'JetBrains Mono', monospace;
-            margin-bottom: 1rem;
+            transition: var(--transition);
+            white-space: nowrap;
         }
 
-        .downloads-grid {
+        .hub-tab-btn:hover {
+            color: #fff;
+        }
+
+        .hub-tab-btn.active {
+            background: var(--cyan);
+            color: #07080d;
+            box-shadow: 0 0 20px rgba(0, 245, 212, 0.35);
+        }
+
+        .hub-tab-panel {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .hub-tab-panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hub-content-box {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-            gap: 1.5rem;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 2.5rem;
+            align-items: center;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 2.5rem;
         }
 
-        .download-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 1.7rem;
+        .hub-platform-lead {
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            gap: 1.2rem;
         }
 
-        .download-card:hover {
-            transform: translateY(-5px);
-            border-color: rgba(0, 255, 255, 0.45);
-            box-shadow: 0 15px 35px rgba(0, 255, 255, 0.12);
-        }
-
-        .download-card.detected {
-            border-color: var(--cyan);
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.22);
-            background: linear-gradient(180deg, rgba(0, 255, 255, 0.05) 0%, var(--card-bg) 100%);
-        }
-
-        .os-detected-badge {
-            display: none;
+        .hub-platform-title-row {
+            display: flex;
             align-items: center;
-            gap: 0.35rem;
-            background: rgba(0, 255, 136, 0.12);
-            color: #00ff88;
-            border: 1px solid rgba(0, 255, 136, 0.35);
-            padding: 0.25rem 0.65rem;
-            border-radius: 20px;
-            font-size: 0.72rem;
+            gap: 0.8rem;
+        }
+
+        .hub-platform-title-row h3 {
+            font-size: 1.7rem;
+            font-weight: 800;
+        }
+
+        .hub-os-badge {
+            background: rgba(16, 185, 129, 0.12);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            font-size: 0.75rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: var(--radius-full);
             font-weight: 700;
             font-family: 'JetBrains Mono', monospace;
-            margin-bottom: 0.8rem;
-            width: fit-content;
+            display: none;
         }
 
-        .platform-header {
-            display: flex;
+        .hub-os-badge.visible {
+            display: inline-flex;
             align-items: center;
-            justify-content: space-between;
-            margin-bottom: 0.8rem;
+            gap: 0.3rem;
         }
 
-        .platform-title-group {
+        .hub-platform-desc {
+            color: var(--text-secondary);
+            font-size: 0.98rem;
+            line-height: 1.6;
+        }
+
+        .hub-download-actions {
             display: flex;
             align-items: center;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+        }
+
+        .btn-hub-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: var(--cyan);
+            color: #05060a !important;
+            font-weight: 700;
+            font-size: 1rem;
+            padding: 0.85rem 1.6rem;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            box-shadow: 0 4px 20px rgba(0, 245, 212, 0.25);
+            transition: var(--transition);
+        }
+
+        .btn-hub-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 245, 212, 0.45);
+        }
+
+        .btn-hub-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-main) !important;
+            border: 1px solid var(--border-subtle);
+            font-weight: 600;
+            font-size: 0.92rem;
+            padding: 0.85rem 1.3rem;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .btn-hub-secondary:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff !important;
+        }
+
+        .hub-specs-card {
+            background: #090a12;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+        }
+
+        .hub-specs-title {
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-tertiary);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .hub-specs-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
             gap: 0.75rem;
         }
 
-        .platform-icon {
-            width: 32px;
-            height: 32px;
-            color: var(--cyan);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .platform-name {
-            font-size: 1.3rem;
-            font-weight: 700;
-            color: #fff;
-            margin: 0;
-        }
-
-        .platform-tag {
-            font-size: 0.72rem;
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--text-muted);
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-family: 'JetBrains Mono', monospace;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .platform-desc {
-            color: var(--text-muted);
+        .hub-specs-list li {
             font-size: 0.88rem;
-            margin: 0.6rem 0 1.5rem 0;
-            line-height: 1.5;
-            min-height: 2.7rem;
-        }
-
-        .dl-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 0.55rem;
-        }
-
-        .dl-btn-primary {
+            color: var(--text-secondary);
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            background: var(--cyan);
-            color: #08080c !important;
-            font-weight: 700;
-            padding: 0.85rem 1rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 0.92rem;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 15px rgba(0, 255, 255, 0.25);
+            gap: 0.6rem;
         }
 
-        .dl-btn-primary:hover {
-            background: #50ffff;
-            box-shadow: 0 6px 22px rgba(0, 255, 255, 0.45);
-            transform: translateY(-2px);
+        .hub-specs-list li span.check {
+            color: var(--cyan);
+            font-weight: bold;
         }
 
-        .dl-btn-secondary {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.4rem;
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-color) !important;
-            border: 1px solid var(--border);
-            font-weight: 500;
+        /* Terminal Box */
+        .terminal-container {
+            background: #090a12;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-top: 1.5rem;
+        }
+
+        .terminal-header-bar {
+            background: #0d0f1a;
             padding: 0.6rem 1rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 0.82rem;
-            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-subtle);
         }
 
-        .dl-btn-secondary:hover {
-            background: rgba(0, 255, 255, 0.08);
-            border-color: rgba(0, 255, 255, 0.3);
-            color: var(--cyan) !important;
+        .terminal-label {
+            font-size: 0.76rem;
+            color: var(--text-tertiary);
+            font-family: 'JetBrains Mono', monospace;
         }
 
-        .downloads-footer-bar {
+        .terminal-body {
+            padding: 1rem 1.2rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+            color: #10b981;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            overflow-x: auto;
+        }
+
+        .btn-copy {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            padding: 0.35rem 0.75rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 600;
+        }
+
+        .btn-copy:hover {
+            background: var(--cyan);
+            color: #07080d;
+        }
+
+        /* Hub Bottom Verification Bar */
+        .hub-footer-strip {
             margin-top: 2rem;
-            padding: 1.2rem 1.6rem;
-            background: var(--dark-panel);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-subtle);
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 1rem;
-            font-size: 0.88rem;
-            color: var(--text-muted);
+            font-size: 0.86rem;
+            color: var(--text-tertiary);
         }
 
-        .downloads-footer-bar a {
+        .hub-footer-strip a {
             color: var(--cyan);
             text-decoration: none;
-            font-weight: 600;
-            transition: opacity 0.2s ease;
+            transition: var(--transition);
         }
 
-        .downloads-footer-bar a:hover {
+        .hub-footer-strip a:hover {
             text-decoration: underline;
+        }
+
+        /* Philosophy Callout */
+        .manifesto-card {
+            background: linear-gradient(135deg, rgba(14, 16, 26, 0.9) 0%, rgba(24, 18, 38, 0.8) 100%);
+            border: 1px solid var(--border-subtle);
+            border-left: 4px solid var(--magenta);
+            border-radius: var(--radius-md);
+            padding: 2.2rem;
+            margin: 4rem 0;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .manifesto-title {
+            font-size: 1.25rem;
+            color: #fff;
+            margin-bottom: 0.6rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .manifesto-text {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.7;
+            font-style: italic;
+        }
+
+        .manifesto-author {
+            margin-top: 1rem;
+            font-size: 0.86rem;
+            color: var(--magenta);
+            font-style: normal;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+
+        /* Bottom Final CTA */
+        .final-cta {
+            text-align: center;
+            padding: 4.5rem 2rem;
+            background: radial-gradient(circle at 50% 50%, rgba(0, 245, 212, 0.08) 0%, transparent 60%);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            margin-bottom: 5rem;
+        }
+
+        .final-cta h2 {
+            font-size: 2.4rem;
+            margin-bottom: 1rem;
+        }
+
+        .final-cta p {
+            color: var(--text-secondary);
+            max-width: 540px;
+            margin: 0 auto 2rem auto;
+            font-size: 1.05rem;
+        }
+
+        /* Footer */
+        .footer {
+            border-top: 1px solid var(--border-subtle);
+            background: #05060a;
+            padding: 3.5rem 0 2.5rem 0;
+            color: var(--text-tertiary);
+            font-size: 0.88rem;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 3rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .footer-brand h4 {
+            color: #fff;
+            font-size: 1.2rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .footer-brand p {
+            line-height: 1.6;
+            max-width: 320px;
+        }
+
+        .footer-col h5 {
+            color: #fff;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .footer-col ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .footer-col a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .footer-col a:hover {
+            color: var(--cyan);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 992px) {
+            .bento-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .bento-card.span-2 {
+                grid-column: span 2;
+            }
+            .stats-strip {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 2rem;
+            }
+            .stat-item:nth-child(2) {
+                border-right: none;
+            }
+            .hub-content-box {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+            .footer-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+            .bento-grid {
+                grid-template-columns: 1fr;
+            }
+            .bento-card.span-2 {
+                grid-column: span 1;
+            }
+            .process-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats-strip {
+                grid-template-columns: 1fr;
+            }
+            .stat-item {
+                border-right: none;
+                border-bottom: 1px solid var(--border-subtle);
+                padding-bottom: 1rem;
+            }
+            .stat-item:last-child {
+                border-bottom: none;
+                padding-bottom: 0;
+            }
+            .download-hub {
+                padding: 1.5rem;
+            }
+            .hub-content-box {
+                padding: 1.5rem;
+            }
+            .footer-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
         }
     </style>
 </head>
 <body>
 
-    <div class="ambient-bg"></div>
+    <div class="ambient-canvas"></div>
 
     <!-- Navigation -->
-    <nav class="navbar">
-        <a href="index.html" class="nav-logo">
-            HiveBear <span>by @kuromi04</span>
-            <span class="nav-tag">v0.2.14</span>
-        </a>
-        <div class="nav-links">
-            <a href="#downloads" style="color: var(--cyan); font-weight: 600;">Descargas</a>
-            <a href="how-it-works.html">Cómo Funciona</a>
-            <a href="https://github.com/kuromi04/TermuxHiveBear">Termux</a>
-            <a href="https://github.com/kuromi04/HiveBear" style="color: var(--cyan);">GitHub ★</a>
-        </div>
-    </nav>
+    <header class="navbar">
+        <div class="container nav-inner">
+            <a href="index.html" class="nav-brand">
+                <div class="nav-brand-logo">🐻</div>
+                <div class="nav-brand-title">HiveBear</div>
+                <span class="nav-author-badge">by @kuromi04</span>
+                <span class="nav-version">v0.2.14</span>
+            </a>
 
-    <!-- Hero Section -->
-    <header class="hero">
-        <div class="badge-live">
-            <span class="pulse-dot"></span> P2P Mesh Network Online • Cloud Coordinator Active
-        </div>
-        <h1 class="neon-title">HIVEBEAR</h1>
-        <div class="neon-subtitle">by @kuromi04</div>
-        <p class="hero-desc">
-            Red P2P distribuida para correr Inteligencia Artificial abierta. Sin corporaciones centrales, sin suscripciones de pago y con sistema de Karma justo.
-        </p>
+            <nav class="nav-links">
+                <a href="#features">Innovaciones</a>
+                <a href="#how-it-works">Cómo Funciona</a>
+                <a href="how-it-works.html">Guía Visual</a>
+                <a href="#downloads" style="color: var(--cyan); font-weight: 600;">Descargas</a>
+                <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener">Termux</a>
+            </nav>
 
-        <div class="banner-container">
-            <img src="https://raw.githubusercontent.com/kuromi04/HiveBear/main/assets/banner.png" alt="HiveBear Cyberpunk Bear Banner">
+            <div class="nav-actions">
+                <a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener" class="btn-smart-secondary" style="padding: 0.5rem 0.9rem; font-size: 0.85rem;">
+                    ★ GitHub
+                </a>
+                <a href="#downloads" class="btn-nav-download">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Descargar
+                </a>
+            </div>
         </div>
     </header>
 
-    <div class="container">
+    <!-- Main Content -->
+    <main class="container">
 
-        <!-- Action Buttons -->
-        <div class="cta-group">
-            <a href="#downloads" class="btn btn-primary">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                Descargar v0.2.14
-            </a>
-            <a href="https://github.com/kuromi04/HiveBear" class="btn btn-outline">
-                ⭐ Repositorio GitHub
-            </a>
-            <a href="how-it-works.html" class="btn btn-outline">
-                🧠 Ver Guía Visual (Docs)
-            </a>
-            <a href="https://github.com/kuromi04/TermuxHiveBear" class="btn btn-outline">
-                📱 Nodo Termux Android
-            </a>
-        </div>
-
-        <!-- Downloads Section -->
-        <section id="downloads" class="downloads-section">
-            <div class="downloads-header">
-                <div class="downloads-badge">
-                    <span>✨</span> Versión Oficial v0.2.14 Disponible
-                </div>
-                <h2 style="font-size: 2.2rem; font-weight: 800; margin: 0 0 0.8rem 0; color: #fff;">
-                    Descargar HiveBear
-                </h2>
-                <p style="max-width: 620px; margin: 0 auto; color: var(--text-muted); font-size: 1.05rem;">
-                    Binarios autónomos y clientes oficiales listos para usar. Sin suscripciones, sin telemetría corporativa y 100% código abierto.
-                </p>
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-tag">
+                <span class="pulse-live"></span>
+                <span>Red P2P en Vivo • Release Oficial v0.2.14</span>
             </div>
 
-            <div class="downloads-grid">
-                <!-- Windows -->
-                <div class="download-card" id="card-windows">
-                    <div>
-                        <div class="os-detected-badge">
-                            <span>●</span> Recomendado para ti
-                        </div>
-                        <div class="platform-header">
-                            <div class="platform-title-group">
-                                <div class="platform-icon">
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.901-1.801"/></svg>
-                                </div>
-                                <h3 class="platform-name">Windows</h3>
-                            </div>
-                            <span class="platform-tag">x64</span>
-                        </div>
-                        <p class="platform-desc">
-                            Windows 10 / 11 (64 bits). Cliente de escritorio completo con aceleración por GPU.
-                        </p>
-                    </div>
-                    <div class="dl-actions">
-                        <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64-setup.exe" class="dl-btn-primary">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            Instalador (.exe)
-                        </a>
-                        <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64.msi" class="dl-btn-secondary">
-                            Paquete MSI (.msi)
-                        </a>
-                    </div>
-                </div>
+            <h1 class="hero-title">
+                Inteligencia Artificial P2P.<br>
+                <span class="gradient-text">Sin Servidores Centrales.</span>
+            </h1>
 
-                <!-- macOS -->
-                <div class="download-card" id="card-mac">
-                    <div>
-                        <div class="os-detected-badge">
-                            <span>●</span> Recomendado para ti
-                        </div>
-                        <div class="platform-header">
-                            <div class="platform-title-group">
-                                <div class="platform-icon">
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 0.92-2.85-.92.04-2.02.62-2.66 1.37-.56.65-.96 1.7-0.84 2.72 1.03.08 2.05-.55 2.58-1.24z"/></svg>
-                                </div>
-                                <h3 class="platform-name">macOS</h3>
-                            </div>
-                            <span class="platform-tag">Universal / ARM</span>
-                        </div>
-                        <p class="platform-desc">
-                            macOS 11 Big Sur o superior. Compatible con Apple Silicon (M1/M2/M3/M4) e Intel.
-                        </p>
-                    </div>
-                    <div class="dl-actions">
-                        <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.dmg" class="dl-btn-primary">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            Descargar (.dmg)
-                        </a>
-                        <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear_0.2.0_aarch64.dmg" class="dl-btn-secondary">
-                            Apple Silicon DMG (ARM64)
-                        </a>
-                    </div>
-                </div>
+            <p class="hero-subtitle">
+                Conecta tu equipo a una red distribuida de inferencia ultrarrápida escrita en Rust. Comparte cómputo sobrante, acumula Karma y chatea con modelos de vanguardia sin suscripciones ni telemetría.
+            </p>
 
-                <!-- Linux -->
-                <div class="download-card" id="card-linux">
-                    <div>
-                        <div class="os-detected-badge">
-                            <span>●</span> Recomendado para ti
-                        </div>
-                        <div class="platform-header">
-                            <div class="platform-title-group">
-                                <div class="platform-icon">
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12.001 2c-3.18 0-5.46 2.43-5.46 5.76 0 1.25.32 2.47.92 3.51-.12.39-.23.8-.23 1.23 0 1.26.68 2.37 1.7 2.94-.13.52-.22 1.07-.22 1.63 0 2.67 1.8 4.93 4.29 4.93 2.49 0 4.29-2.26 4.29-4.93 0-.56-.09-1.11-.22-1.63 1.02-.57 1.7-1.68 1.7-2.94 0-.43-.11-.84-.23-1.23.6-1.04.92-2.26.92-3.51 0-3.33-2.28-5.76-5.46-5.76zm-2.07 6.84c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm4.14 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1z"/></svg>
-                                </div>
-                                <h3 class="platform-name">Linux</h3>
-                            </div>
-                            <span class="platform-tag">x86_64</span>
-                        </div>
-                        <p class="platform-desc">
-                            Compatible con Ubuntu, Debian, Fedora, Arch y cualquier distribución GNU/Linux.
-                        </p>
-                    </div>
-                    <div class="dl-actions">
-                        <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x86_64.AppImage" class="dl-btn-primary">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            Descargar AppImage
-                        </a>
-                        <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x86_64.deb" class="dl-btn-secondary">
-                            Paquete Debian (.deb)
-                        </a>
-                    </div>
+            <!-- Smart Dynamic CTA -->
+            <div class="hero-cta-wrapper">
+                <div class="hero-cta-buttons">
+                    <a id="hero-smart-btn" href="#downloads" class="btn-smart-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        <span id="hero-smart-text">Descargar HiveBear v0.2.14</span>
+                    </a>
+                    <a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener" class="btn-smart-secondary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                        Explorar Repositorio
+                    </a>
                 </div>
-
-                <!-- Android -->
-                <div class="download-card" id="card-android">
-                    <div>
-                        <div class="os-detected-badge">
-                            <span>●</span> Recomendado para ti
-                        </div>
-                        <div class="platform-header">
-                            <div class="platform-title-group">
-                                <div class="platform-icon">
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5802 8.3585 13.8447 8 12 8s-3.5802.3585-5.1368.9497L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>
-                                </div>
-                                <h3 class="platform-name">Android</h3>
-                            </div>
-                            <span class="platform-tag">APK Universal</span>
-                        </div>
-                        <p class="platform-desc">
-                            Android 7.0+. Cliente móvil nativo APK con soporte para nodos móviles e inferencia P2P.
-                        </p>
-                    </div>
-                    <div class="dl-actions">
-                        <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.apk" class="dl-btn-primary">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            Descargar APK (.apk)
-                        </a>
-                        <a href="https://github.com/kuromi04/TermuxHiveBear" class="dl-btn-secondary">
-                            CLI en Termux (GitHub)
-                        </a>
-                    </div>
+                <div class="hero-cta-sublink">
+                    Disponible para <a href="#downloads" onclick="selectTab('windows')">Windows</a>, <a href="#downloads" onclick="selectTab('android')">Android APK</a>, <a href="#downloads" onclick="selectTab('mac')">macOS</a>, <a href="#downloads" onclick="selectTab('linux')">Linux</a> y <a href="#downloads" onclick="selectTab('cli')">CLI Termux</a>.
                 </div>
             </div>
 
-            <!-- Checksums and Full Releases -->
-            <div class="downloads-footer-bar">
-                <div>
-                    🔒 <span>Verificación criptográfica: </span>
-                    <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/SHA256SUMS.txt">SHA256SUMS.txt</a>
+            <!-- Product Showcase Viewport -->
+            <div class="hero-mockup-frame">
+                <div class="hero-mockup-inner">
+                    <div class="mockup-topbar">
+                        <div class="mockup-dots">
+                            <span class="mockup-dot dot-close"></span>
+                            <span class="mockup-dot dot-min"></span>
+                            <span class="mockup-dot dot-max"></span>
+                        </div>
+                        <div class="mockup-title">hivebear-desktop — v0.2.14</div>
+                        <div style="width: 40px;"></div>
+                    </div>
+                    <img src="https://raw.githubusercontent.com/kuromi04/HiveBear/main/assets/banner.png" alt="HiveBear Cyberpunk P2P Mesh Banner" class="hero-banner-img">
                 </div>
-                <div>
-                    📦 <a href="https://github.com/kuromi04/HiveBear/releases">Ver todos los lanzamientos en GitHub Releases →</a>
+                <!-- Floating Info Chips -->
+                <div class="floating-chips">
+                    <div class="floating-chip">
+                        <span>🛡️</span> Cifrado Punto a Punto QUIC
+                    </div>
+                    <div class="floating-chip">
+                        <span>⚖️</span> Economía de Karma PoW
+                    </div>
+                    <div class="floating-chip">
+                        <span>🌐</span> NAT Bypass (Sin abrir puertos)
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- Philosophy Cards -->
-        <div class="quote-box">
-            <p><strong>Welcome to the Den.</strong> HiveBear is built by people who think AI should be for everyone - not just people with deep pockets and top-shelf hardware. Share your spare compute, contribute code, help someone get started, or just hang out. The pack looks after its own.</p>
-        </div>
+        <!-- Stats Proof Strip -->
+        <section class="stats-strip">
+            <div class="stat-item">
+                <div class="stat-value"><span style="color: var(--cyan);">100%</span></div>
+                <div class="stat-label">Escrito en Rust Nativo</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">TLS 1.3</div>
+                <div class="stat-label">Cifrado de Tensores QUIC</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">$0 / mes</div>
+                <div class="stat-label">Sin Suscripciones Corporativas</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">Multi-OS</div>
+                <div class="stat-label">Windows, Mac, Linux y Android</div>
+            </div>
+        </section>
 
-        <div class="quote-box quote-box-es">
-            <p><strong>Bienvenido a la Guarida.</strong> HiveBear está construido por personas que creen que la IA debería ser para todos, no solo para quienes tienen hardware de gama alta. Comparte tu poder de cómputo libre, contribuye con código, ayuda a alguien a empezar, o simplemente pasa el rato. La manada cuida de los suyos.</p>
-        </div>
-
-        <!-- Key Features Grid -->
-        <h2 class="section-title">Innovaciones del Ecosistema</h2>
-
-        <div class="features-grid">
-            <div class="card">
-                <div class="card-icon">⚖️</div>
-                <h3>Sistema de Karma & Cola VIP</h3>
-                <p>Moneda de reputación justa. Dona TFLOPS a la manada y gana Karma verificado. Los usuarios VIP_ALPHA tienen pase preferente al pedir cálculos pesados.</p>
+        <!-- Architecture & Features (Bento Grid) -->
+        <section id="features">
+            <div class="section-header">
+                <div class="section-badge">Pilares Tecnológicos</div>
+                <h2 class="section-title">Ingeniería Distribuida de Nueva Generación</h2>
+                <p class="section-desc">Diseñado desde cero para garantizar equidad, rendimiento bare-metal y privacidad matemática.</p>
             </div>
 
-            <div class="card">
-                <div class="card-icon">🔐</div>
-                <h3>Anti-Cheat Proof-of-Work</h3>
-                <p>Cero trampas. Recibos de trabajo firmados criptográficamente y protección anti-replay. Imposible inflar puntos con bots o código modificado.</p>
-            </div>
-
-            <div class="card">
-                <div class="card-icon">📱</div>
-                <h3>Termux & Android Nativo</h3>
-                <p>Convierte cualquier teléfono Android en un cliente móvil inteligente o nodo de cómputo, conectado directamente con PCs de escritorio.</p>
-            </div>
-
-            <div class="card">
-                <div class="card-icon">🛡️</div>
-                <h3>Seguridad & Cifrado QUIC</h3>
-                <p>Comunicación blindada punto a punto con TLS 1.3. Los nodos solo procesan tensores numéricos; es matemáticamente imposible acceder a archivos personales.</p>
-            </div>
-
-            <div class="card">
-                <div class="card-icon">🌐</div>
-                <h3>Sin Abrir Puertos (NAT Bypass)</h3>
-                <p>STUN y Hole-Punching automático. Conecta dos computadoras en países distintos sin necesidad de configurar routers ni pagar VPNs privadas.</p>
-            </div>
-
-            <div class="card">
-                <div class="card-icon">💬</div>
-                <h3>Chat con Modelos & Persistencia</h3>
-                <p>Chatea de forma 100% privada con modelos de lenguaje locales (Llama 3.2, Qwen, Mistral). Historial completo de conversaciones guardado con base de datos SQLite cifrada.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon">⚡</div>
-                <h3>100% Escrito en Rust</h3>
-                <p>Velocidad nativa, mínimo consumo de memoria RAM y máxima eficiencia energética para computadoras y dispositivos móviles.</p>
-            </div>
-        </div>
-
-        <!-- One Line Installers -->
-        <h2 class="section-title">Instalación Rápida en 1 Línea</h2>
-
-        <p style="text-align: center; color: var(--text-muted); margin-bottom: 2rem;">
-            Instala todas las dependencias y prepara el entorno automáticamente:
-        </p>
-
-        <!-- Linux / Mac / Termux -->
-        <div class="terminal-box">
-            <div class="terminal-header">
-                <div class="terminal-dots">
-                    <span class="dot dot-red"></span>
-                    <span class="dot dot-yellow"></span>
-                    <span class="dot dot-green"></span>
+            <div class="bento-grid">
+                <!-- Large Bento 1: Karma & Fair Share -->
+                <div class="bento-card span-2">
+                    <div class="bento-icon">⚖️</div>
+                    <h3 class="bento-title">Sistema de Karma & Cola VIP_ALPHA</h3>
+                    <p class="bento-desc">
+                        La manada cuida de los suyos. Dona TFLOPS cuando tu ordenador esté inactivo y obtén Karma verificado criptográficamente. Los usuarios con alta reputación y pase VIP_ALPHA tienen prioridad garantizada al solicitar inferencias pesadas a la red.
+                    </p>
+                    <div class="bento-tag-pill">ECONOMÍA COLABORATIVA DESCENTRALIZADA →</div>
                 </div>
-                <span class="terminal-title">bash — Linux / macOS / Android (Termux)</span>
-                <button class="copy-btn" onclick="navigator.clipboard.writeText('curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash')">Copiar</button>
-            </div>
-            <div class="terminal-content">
-curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash
-            </div>
-        </div>
 
-        <!-- Windows -->
-        <div class="terminal-box">
-            <div class="terminal-header">
-                <div class="terminal-dots">
-                    <span class="dot dot-red"></span>
-                    <span class="dot dot-yellow"></span>
-                    <span class="dot dot-green"></span>
+                <!-- Bento 2: QUIC & Privacy -->
+                <div class="bento-card">
+                    <div class="bento-icon">🔐</div>
+                    <h3 class="bento-title">Privacidad Ciega de Tensores</h3>
+                    <p class="bento-desc">
+                        Los nodos remotos solo reciben tensores numéricos matemáticos opacos sobre QUIC. Es imposible que un worker acceda a tu texto o archivos.
+                    </p>
+                    <div class="bento-tag-pill">TLS 1.3 + QUIC BYPASS →</div>
                 </div>
-                <span class="terminal-title">powershell — Windows 10 / 11 (Administrador)</span>
-                <button class="copy-btn" onclick="navigator.clipboard.writeText('irm https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.ps1 | iex')">Copiar</button>
-            </div>
-            <div class="terminal-content" style="color: var(--cyan);">
-irm https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.ps1 | iex
-            </div>
-        </div>
 
-    </div>
+                <!-- Bento 3: NAT Hole-Punching -->
+                <div class="bento-card">
+                    <div class="bento-icon">🌐</div>
+                    <h3 class="bento-title">Sin Abrir Puertos (NAT Hole-Punching)</h3>
+                    <p class="bento-desc">
+                        Protocolos STUN y Hole-Punching automáticos. Conecta dos computadoras en distintas partes del mundo sin tocar la configuración de tu router ni pagar VPNs privadas.
+                    </p>
+                    <div class="bento-tag-pill">ZERO-CONFIG NETWORKING →</div>
+                </div>
+
+                <!-- Bento 4: Mobile & Termux -->
+                <div class="bento-card">
+                    <div class="bento-icon">📱</div>
+                    <h3 class="bento-title">Android Nativo & Termux Node</h3>
+                    <p class="bento-desc">
+                        Lleva HiveBear en tu bolsillo con el APK firmado oficial o monta un cluster headless en Android con el script optimizado de Termux.
+                    </p>
+                    <div class="bento-tag-pill">ARM64 & MOBILE INFERENCE →</div>
+                </div>
+
+                <!-- Bento 5: Local Models & Persistence -->
+                <div class="bento-card">
+                    <div class="bento-icon">💬</div>
+                    <h3 class="bento-title">Modelos GGUF & SQLite Cifrado</h3>
+                    <p class="bento-desc">
+                        Descarga y ejecuta Llama 3.2, Qwen 2.5 y Mistral localmente. Historial de chat privado persistido en SQLite sin llamadas a la nube.
+                    </p>
+                    <div class="bento-tag-pill">100% OFFLINE CAPABLE →</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3-Step Process -->
+        <section id="how-it-works">
+            <div class="section-header">
+                <div class="section-badge">Flujo de Trabajo</div>
+                <h2 class="section-title">Empieza en Menos de 2 Minutos</h2>
+                <p class="section-desc">Un ecosistema diseñado para usuarios finales y desarrolladores sin fricción.</p>
+            </div>
+
+            <div class="process-grid">
+                <div class="process-card">
+                    <div class="process-step-num">01</div>
+                    <h4 class="process-title">Descarga el Cliente</h4>
+                    <p class="process-desc">Elige el instalador para Windows, macOS, Linux o el APK oficial para Android listo para usar.</p>
+                </div>
+                <div class="process-card">
+                    <div class="process-step-num">02</div>
+                    <h4 class="process-title">Únete a la Colmena</h4>
+                    <p class="process-desc">Pulsa "Join Mesh" en la interfaz. El protocolo conectará tu nodo automáticamente con pares cercanos.</p>
+                </div>
+                <div class="process-card">
+                    <div class="process-step-num">03</div>
+                    <h4 class="process-title">Infiere y Gana Karma</h4>
+                    <p class="process-desc">Haz consultas a modelos de IA libres o comparte tu GPU/CPU cuando no la uses para ganar reputación.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- UNIFIED DOWNLOAD HUB (All platforms, zero duplicate clutter) -->
+        <section id="downloads" class="download-hub">
+            <div class="section-header" style="margin-bottom: 2rem;">
+                <div class="section-badge">Centro de Descargas Oficial</div>
+                <h2 class="section-title">Elige tu Plataforma</h2>
+                <p class="section-desc">Instaladores oficiales verificados, paquetes de código abierto y scripts de terminal en un solo lugar.</p>
+            </div>
+
+            <!-- Tab Buttons Selector -->
+            <div class="hub-tabs-container">
+                <div class="hub-tabs" role="tablist">
+                    <button class="hub-tab-btn active" id="tab-btn-windows" onclick="selectTab('windows')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.901-1.801"/></svg>
+                        Windows
+                    </button>
+                    <button class="hub-tab-btn" id="tab-btn-android" onclick="selectTab('android')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5802 8.3585 13.8447 8 12 8s-3.5802.3585-5.1368.9497L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>
+                        Android
+                    </button>
+                    <button class="hub-tab-btn" id="tab-btn-mac" onclick="selectTab('mac')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 0.92-2.85-.92.04-2.02.62-2.66 1.37-.56.65-.96 1.7-0.84 2.72 1.03.08 2.05-.55 2.58-1.24z"/></svg>
+                        macOS
+                    </button>
+                    <button class="hub-tab-btn" id="tab-btn-linux" onclick="selectTab('linux')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.001 2c-3.18 0-5.46 2.43-5.46 5.76 0 1.25.32 2.47.92 3.51-.12.39-.23.8-.23 1.23 0 1.26.68 2.37 1.7 2.94-.13.52-.22 1.07-.22 1.63 0 2.67 1.8 4.93 4.29 4.93 2.49 0 4.29-2.26 4.29-4.93 0-.56-.09-1.11-.22-1.63 1.02-.57 1.7-1.68 1.7-2.94 0-.43-.11-.84-.23-1.23.6-1.04.92-2.26.92-3.51 0-3.33-2.28-5.76-5.46-5.76zm-2.07 6.84c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm4.14 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1z"/></svg>
+                        Linux
+                    </button>
+                    <button class="hub-tab-btn" id="tab-btn-cli" onclick="selectTab('cli')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                        Terminal / CLI
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Panels -->
+
+            <!-- 1. WINDOWS PANEL -->
+            <div class="hub-tab-panel active" id="panel-windows">
+                <div class="hub-content-box">
+                    <div class="hub-platform-lead">
+                        <div class="hub-platform-title-row">
+                            <h3>Windows 10 / 11</h3>
+                            <span class="hub-os-badge" id="badge-os-windows">● Detectado en tu equipo</span>
+                        </div>
+                        <p class="hub-platform-desc">
+                            Cliente de escritorio completo con aceleración por hardware (Vulkan / DirectML), panel de control de nodos y chat local integrado.
+                        </p>
+                        <div class="hub-download-actions">
+                            <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64-setup.exe" class="btn-hub-primary">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Descargar Instalador (.exe)
+                            </a>
+                            <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64.msi" class="btn-hub-secondary">
+                                Paquete MSI (.msi)
+                            </a>
+                        </div>
+                    </div>
+                    <div class="hub-specs-card">
+                        <div class="hub-specs-title">Especificaciones</div>
+                        <ul class="hub-specs-list">
+                            <li><span class="check">✓</span> Arquitectura x86_64 (64 bits)</li>
+                            <li><span class="check">✓</span> Soporte Windows 10 y Windows 11</li>
+                            <li><span class="check">✓</span> Instalador liviano (~9.3 MB)</li>
+                            <li><span class="check">✓</span> Cero dependencias externas requeridas</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Windows One-Liner -->
+                <div class="terminal-container">
+                    <div class="terminal-header-bar">
+                        <span class="terminal-label">powershell (Windows Terminal / PowerShell 7)</span>
+                        <button class="btn-copy" onclick="copySnippet('irm https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.ps1 | iex', this)">Copiar Comando</button>
+                    </div>
+                    <div class="terminal-body">
+                        <span>irm https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.ps1 | iex</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. ANDROID PANEL -->
+            <div class="hub-tab-panel" id="panel-android">
+                <div class="hub-content-box">
+                    <div class="hub-platform-lead">
+                        <div class="hub-platform-title-row">
+                            <h3>Android Móvil</h3>
+                            <span class="hub-os-badge" id="badge-os-android">● Detectado en tu móvil</span>
+                        </div>
+                        <p class="hub-platform-desc">
+                            APK Universal firmado con firma oficial v2/v3 y soporte para almacenamiento seguro de modelos en memoria privada. Conéctate a la red P2P directamente desde tu teléfono.
+                        </p>
+                        <div class="hub-download-actions">
+                            <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.apk" class="btn-hub-primary">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Descargar APK Oficial (.apk)
+                            </a>
+                            <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="btn-hub-secondary">
+                                Script Termux para Android →
+                            </a>
+                        </div>
+                    </div>
+                    <div class="hub-specs-card">
+                        <div class="hub-specs-title">Compatibilidad Móvil</div>
+                        <ul class="hub-specs-list">
+                            <li><span class="check">✓</span> Android 7.0 (Nougat) hasta Android 15</li>
+                            <li><span class="check">✓</span> APK firmado criptográficamente</li>
+                            <li><span class="check">✓</span> Descarga de modelos en almacenamiento interno</li>
+                            <li><span class="check">✓</span> ARM64 (aarch64) & ARMv7 optimizado</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Android Termux One-Liner -->
+                <div class="terminal-container">
+                    <div class="terminal-header-bar">
+                        <span class="terminal-label">bash (Termux en Android)</span>
+                        <button class="btn-copy" onclick="copySnippet('curl -fsSL https://raw.githubusercontent.com/kuromi04/TermuxHiveBear/main/install.sh | bash', this)">Copiar Comando</button>
+                    </div>
+                    <div class="terminal-body">
+                        <span>curl -fsSL https://raw.githubusercontent.com/kuromi04/TermuxHiveBear/main/install.sh | bash</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. MACOS PANEL -->
+            <div class="hub-tab-panel" id="panel-mac">
+                <div class="hub-content-box">
+                    <div class="hub-platform-lead">
+                        <div class="hub-platform-title-row">
+                            <h3>macOS Universal</h3>
+                            <span class="hub-os-badge" id="badge-os-mac">● Detectado en tu Mac</span>
+                        </div>
+                        <p class="hub-platform-desc">
+                            Paquete DMG con aceleración Metal para Apple Silicon (M1, M2, M3, M4) e Intel x86_64. Máximo rendimiento gráfico y eficiencia en arquitectura ARM.
+                        </p>
+                        <div class="hub-download-actions">
+                            <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.dmg" class="btn-hub-primary">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Descargar Universal (.dmg)
+                            </a>
+                            <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear_0.2.0_aarch64.dmg" class="btn-hub-secondary">
+                                DMG Apple Silicon (ARM64)
+                            </a>
+                        </div>
+                    </div>
+                    <div class="hub-specs-card">
+                        <div class="hub-specs-title">Requisitos macOS</div>
+                        <ul class="hub-specs-list">
+                            <li><span class="check">✓</span> macOS 11.0 (Big Sur) o superior</li>
+                            <li><span class="check">✓</span> Soporte nativo para Apple Silicon M-Series</li>
+                            <li><span class="check">✓</span> Motor de aceleración Metal activado</li>
+                            <li><span class="check">✓</span> Binario firmado y verificado</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. LINUX PANEL -->
+            <div class="hub-tab-panel" id="panel-linux">
+                <div class="hub-content-box">
+                    <div class="hub-platform-lead">
+                        <div class="hub-platform-title-row">
+                            <h3>GNU / Linux</h3>
+                            <span class="hub-os-badge" id="badge-os-linux">● Detectado en tu Linux</span>
+                        </div>
+                        <p class="hub-platform-desc">
+                            Binarios portables autónomos AppImage y paquetes Debian (.deb) compatibles con Ubuntu, Debian, Fedora, Arch y cualquier distribución moderna.
+                        </p>
+                        <div class="hub-download-actions">
+                            <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x86_64.AppImage" class="btn-hub-primary">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Descargar AppImage
+                            </a>
+                            <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x86_64.deb" class="btn-hub-secondary">
+                                Paquete Debian (.deb)
+                            </a>
+                        </div>
+                    </div>
+                    <div class="hub-specs-card">
+                        <div class="hub-specs-title">Compatibilidad Linux</div>
+                        <ul class="hub-specs-list">
+                            <li><span class="check">✓</span> GLIBC 2.31+ (Ubuntu 20.04+, Debian 11+)</li>
+                            <li><span class="check">✓</span> Formato AppImage auto-ejecutable</li>
+                            <li><span class="check">✓</span> Soporte para GPUs NVIDIA (CUDA) y AMD</li>
+                            <li><span class="check">✓</span> Integración nativa con bandejas del sistema</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Linux One-Liner -->
+                <div class="terminal-container">
+                    <div class="terminal-header-bar">
+                        <span class="terminal-label">bash (Linux / macOS)</span>
+                        <button class="btn-copy" onclick="copySnippet('curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash', this)">Copiar Comando</button>
+                    </div>
+                    <div class="terminal-body">
+                        <span>curl -fsSL https://raw.githubusercontent.com/kuromi04/HiveBear/main/scripts/setup.sh | bash</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. CLI & DEVELOPER PANEL -->
+            <div class="hub-tab-panel" id="panel-cli">
+                <div class="hub-content-box">
+                    <div class="hub-platform-lead">
+                        <div class="hub-platform-title-row">
+                            <h3>Línea de Comandos (CLI)</h3>
+                        </div>
+                        <p class="hub-platform-desc">
+                            Binarios CLI ultralivianos para servidores headless, VPS, clústeres y entornos de desarrollo. Corre el nodo en segundo plano como daemon o servicio de sistema.
+                        </p>
+                        <div class="hub-download-actions">
+                            <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/hivebear-x86_64-unknown-linux-gnu.tar.gz" class="btn-hub-primary">
+                                CLI Linux x86_64 (.tar.gz)
+                            </a>
+                            <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/hivebear-x86_64-pc-windows-msvc.zip" class="btn-hub-secondary">
+                                CLI Windows (.zip)
+                            </a>
+                        </div>
+                    </div>
+                    <div class="hub-specs-card">
+                        <div class="hub-specs-title">Opciones Headless</div>
+                        <ul class="hub-specs-list">
+                            <li><span class="check">✓</span> Consumo inferior a 45 MB de RAM</li>
+                            <li><span class="check">✓</span> Linux ARM64 y Apple Darwin disponibles</li>
+                            <li><span class="check">✓</span> Modo daemon con <code>hivebear start --daemon</code></li>
+                            <li><span class="check">✓</span> Configuración vía archivo TOML</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="terminal-container">
+                    <div class="terminal-header-bar">
+                        <span class="terminal-label">Instalación vía Cargo (Rust)</span>
+                        <button class="btn-copy" onclick="copySnippet('cargo install --git https://github.com/kuromi04/HiveBear hivebear-cli', this)">Copiar Comando</button>
+                    </div>
+                    <div class="terminal-body">
+                        <span>cargo install --git https://github.com/kuromi04/HiveBear hivebear-cli</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hub Verification Footer -->
+            <div class="hub-footer-strip">
+                <div>
+                    🔒 <span>Checksums criptográficos: </span>
+                    <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/SHA256SUMS.txt" target="_blank" rel="noopener">SHA256SUMS.txt</a>
+                </div>
+                <div>
+                    📦 <a href="https://github.com/kuromi04/HiveBear/releases" target="_blank" rel="noopener">Explorar todos los binarios y tags en GitHub Releases →</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Community Manifesto -->
+        <section class="manifesto-card">
+            <h3 class="manifesto-title">🐻 La Guarida de HiveBear</h3>
+            <p class="manifesto-text">
+                "HiveBear está construido por personas que creemos que la Inteligencia Artificial debe ser abierta y accesible para todos, no solo para monopolios corporativos y presupuestos millonarios. Comparte tu poder de cómputo libre, contribuye con código o simplemente únete a la conversación. La manada cuida de los suyos."
+            </p>
+            <div class="manifesto-author">— @kuromi04 & la comunidad de HiveBear</div>
+        </section>
+
+        <!-- Final Call to Action -->
+        <section class="final-cta">
+            <h2>Únete a la Revolución de la IA Libre</h2>
+            <p>Descarga el cliente en segundos o conecta tu nodo en la nube sin configuraciones complejas.</p>
+            <div class="hero-cta-buttons">
+                <a href="#downloads" class="btn-smart-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Obtener HiveBear Ahora
+                </a>
+                <a href="how-it-works.html" class="btn-smart-secondary">
+                    Ver Arquitectura Visual
+                </a>
+            </div>
+        </section>
+
+    </main>
 
     <!-- Footer -->
-    <footer>
-        <p>Ecosistema HiveBear P2P — Diseñado, Parcheado y Mantenido por <a href="https://github.com/kuromi04">@kuromi04</a></p>
-        <p style="color: #444; margin-top: 0.5rem;">Licencia de Código Abierto MIT • "La manada cuida de los suyos"</p>
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <h4>🐻 HiveBear</h4>
+                    <p>Red P2P distribuida para cómputo e inferencia de Inteligencia Artificial abierta. Creado, diseñado y mantenido por <a href="https://github.com/kuromi04" style="color: var(--cyan); text-decoration: none;">@kuromi04</a>.</p>
+                </div>
+                <div class="footer-col">
+                    <h5>Plataformas</h5>
+                    <ul>
+                        <li><a href="#downloads" onclick="selectTab('windows')">Windows 10/11</a></li>
+                        <li><a href="#downloads" onclick="selectTab('android')">Android APK</a></li>
+                        <li><a href="#downloads" onclick="selectTab('mac')">macOS Universal</a></li>
+                        <li><a href="#downloads" onclick="selectTab('linux')">Linux AppImage / .deb</a></li>
+                        <li><a href="#downloads" onclick="selectTab('cli')">CLI & Servidores</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h5>Recursos</h5>
+                    <ul>
+                        <li><a href="how-it-works.html">Cómo Funciona</a></li>
+                        <li><a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener">Nodo Termux Android</a></li>
+                        <li><a href="https://github.com/kuromi04/HiveBear/blob/main/docs/HOW_IT_WORKS.md" target="_blank" rel="noopener">Documentación Técnica</a></li>
+                        <li><a href="https://github.com/kuromi04/HiveBear/releases" target="_blank" rel="noopener">Lanzamientos & Tags</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h5>Proyecto</h5>
+                    <ul>
+                        <li><a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener">GitHub Oficial</a></li>
+                        <li><a href="https://github.com/kuromi04/HiveBear/issues" target="_blank" rel="noopener">Reportar un Error</a></li>
+                        <li><a href="https://github.com/kuromi04/HiveBear/blob/main/LICENSE" target="_blank" rel="noopener">Licencia MIT</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <div>
+                    © 2026 HiveBear Project • Licencia Código Abierto MIT.
+                </div>
+                <div>
+                    Hecho con <span>♥</span> y Rust por <strong>@kuromi04</strong>
+                </div>
+            </div>
+        </div>
     </footer>
 
+    <!-- Smart Interactive Logic -->
     <script>
+        // OS Detection and Dynamic Hero Configuration
         (function() {
             try {
                 const ua = navigator.userAgent || '';
-                let os = null;
+                let detectedOS = 'windows';
+                let osLabel = 'Windows';
+                let downloadUrl = 'https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64-setup.exe';
+                let btnText = 'Descargar para Windows (v0.2.14)';
+
                 if (/android/i.test(ua)) {
-                    os = 'android';
+                    detectedOS = 'android';
+                    osLabel = 'Android';
+                    downloadUrl = 'https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.apk';
+                    btnText = 'Descargar HiveBear.apk (Android)';
                 } else if (/macintosh|mac os x/i.test(ua)) {
-                    os = 'mac';
+                    detectedOS = 'mac';
+                    osLabel = 'macOS';
+                    downloadUrl = 'https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.dmg';
+                    btnText = 'Descargar para Mac (.dmg)';
                 } else if (/linux/i.test(ua)) {
-                    os = 'linux';
-                } else if (/windows|win32/i.test(ua)) {
-                    os = 'windows';
+                    detectedOS = 'linux';
+                    osLabel = 'Linux';
+                    downloadUrl = 'https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x86_64.AppImage';
+                    btnText = 'Descargar AppImage (Linux)';
                 }
 
-                if (os) {
-                    const card = document.getElementById('card-' + os);
-                    if (card) {
-                        card.classList.add('detected');
-                        const badge = card.querySelector('.os-detected-badge');
-                        if (badge) {
-                            badge.style.display = 'inline-flex';
-                        }
-                    }
+                // Update Hero Smart Button
+                const heroBtn = document.getElementById('hero-smart-btn');
+                const heroText = document.getElementById('hero-smart-text');
+                if (heroBtn && heroText) {
+                    heroBtn.href = downloadUrl;
+                    heroText.textContent = btnText;
                 }
-            } catch (e) {
-                console.debug('OS detection error', e);
+
+                // Show OS badge in the corresponding hub tab
+                const badge = document.getElementById('badge-os-' + detectedOS);
+                if (badge) {
+                    badge.classList.add('visible');
+                }
+
+                // Automatically select the detected OS tab in the Download Hub
+                selectTab(detectedOS);
+            } catch (err) {
+                console.debug('OS Detection init', err);
             }
         })();
+
+        // Tab Switching Logic
+        function selectTab(tabId) {
+            const tabs = ['windows', 'android', 'mac', 'linux', 'cli'];
+            if (!tabs.includes(tabId)) return;
+
+            // Remove active from all tabs and panels
+            tabs.forEach(t => {
+                const btn = document.getElementById('tab-btn-' + t);
+                const panel = document.getElementById('panel-' + t);
+                if (btn) btn.classList.remove('active');
+                if (panel) panel.classList.remove('active');
+            });
+
+            // Activate chosen tab and panel
+            const activeBtn = document.getElementById('tab-btn-' + tabId);
+            const activePanel = document.getElementById('panel-' + tabId);
+            if (activeBtn) activeBtn.classList.add('active');
+            if (activePanel) activePanel.classList.add('active');
+        }
+
+        // Copy Terminal Snippet Helper
+        function copySnippet(text, buttonElement) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = buttonElement.textContent;
+                buttonElement.textContent = '¡Copiado!';
+                buttonElement.style.background = 'var(--cyan)';
+                buttonElement.style.color = '#07080d';
+                setTimeout(() => {
+                    buttonElement.textContent = originalText;
+                    buttonElement.style.background = '';
+                    buttonElement.style.color = '';
+                }, 2000);
+            }).catch(e => {
+                console.error('Clipboard copy failed', e);
+            });
+        }
     </script>
 </body>
 </html>
