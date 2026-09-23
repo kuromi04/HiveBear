@@ -66,7 +66,7 @@ jobs:
 
       - name: Install cross (aarch64-linux)
         if: matrix.use_cross
-        run: cargo install cross@0.2.5 --locked
+        run: which cross >/dev/null 2>&1 || cargo install cross@0.2.5 --locked --force
 
       - name: Add target
         if: "!matrix.use_cross"
@@ -168,7 +168,8 @@ jobs:
           npm install
 
       - name: Install tauri-cli
-        run: cargo install tauri-cli@2.5.0 --locked
+        shell: bash
+        run: which cargo-tauri >/dev/null 2>&1 || cargo install tauri-cli@2.5.0 --locked --force
 
       - name: Build Tauri app (default features)
         if: matrix.tauri_features == ''
@@ -256,7 +257,7 @@ jobs:
           restore-keys: ubuntu-cargo-install-
 
       - name: cargo install from path
-        run: cargo install --path crates/hivebear-cli --locked
+        run: cargo install --path crates/hivebear-cli --locked --force
 
       - name: Verify binary
         run: hivebear --version
