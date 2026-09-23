@@ -31,6 +31,8 @@ pub fn run() {
                     .path()
                     .app_data_dir()
                     .expect("Failed to resolve app data directory");
+                std::env::set_var("HIVEBEAR_HOME", &base);
+                std::env::set_var("HIVEBEAR_DATA_DIR", &base);
                 let paths = AppState::paths_from_base(base);
                 AppState::init_with_paths(paths)
             } else {

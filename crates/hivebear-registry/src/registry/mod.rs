@@ -36,12 +36,26 @@ impl Registry {
         let index_path = paths.data_dir.join("registry.json");
         let index = LocalIndex::load(&index_path)?;
 
+        // If config.models_dir is invalid or read-only (e.g. root / or relative on mobile),
+        // fallback to paths.models_dir which is guaranteed to be writable
+        let models_dir = if config.models_dir.as_os_str().is_empty()
+            || config.models_dir == std::path::PathBuf::from(".")
+            || !config.models_dir.is_absolute()
+            || (cfg!(target_os = "android") && !config.models_dir.starts_with("/data/"))
+        {
+            paths.models_dir.clone()
+        } else {
+            config.models_dir.clone()
+        };
+
+        let _ = tokio::fs::create_dir_all(&models_dir).await;
+
         Ok(Self {
             hf: HuggingFaceSource::new(),
             ollama: OllamaSource::new(),
             index: Arc::new(Mutex::new(index)),
-            downloader: DownloadManager::new(config.models_dir.clone()),
-            models_dir: config.models_dir.clone(),
+            downloader: DownloadManager::new(models_dir.clone()),
+            models_dir,
         })
     }
 

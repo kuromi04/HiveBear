@@ -31,7 +31,16 @@ impl AppState {
             .ensure_dirs()
             .expect("Failed to create app directories");
 
-        let config = Config::load();
+        let mut config = Config::load_from(&paths.config_file);
+        // Ensure config.models_dir uses the explicit valid models_dir from paths,
+        // preventing fallback to read-only directories on mobile platforms
+        if cfg!(target_os = "android")
+            || config.models_dir.as_os_str().is_empty()
+            || !config.models_dir.is_absolute()
+        {
+            config.models_dir = paths.models_dir.clone();
+        }
+
         let profile = hivebear_core::profile();
         let orchestrator = Orchestrator::with_config(profile.clone(), &config);
         let registry = tauri::async_runtime::block_on(Registry::new(&config, &paths))

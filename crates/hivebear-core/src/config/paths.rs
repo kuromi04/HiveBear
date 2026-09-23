@@ -23,41 +23,62 @@ pub struct AppPaths {
 impl AppPaths {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new() -> Self {
-        let dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION);
+        // Priority 1: Explicit environment overrides (e.g. set by Tauri on mobile or Termux)
+        if let Ok(dir) = std::env::var("HIVEBEAR_HOME").or_else(|_| std::env::var("HIVEBEAR_DATA_DIR")) {
+            let base = PathBuf::from(dir);
+            return Self::from_base(base);
+        }
 
-        match dirs {
-            Some(dirs) => {
-                let config_dir = dirs.config_dir().to_path_buf();
-                let data_dir = dirs.data_dir().to_path_buf();
-                let cache_dir = dirs.cache_dir().to_path_buf();
+        // Priority 2: On Android, default to app internal writable storage
+        #[cfg(target_os = "android")]
+        {
+            let base = PathBuf::from("/data/data/com.hivebear.app/files");
+            return Self::from_base(base);
+        }
 
-                Self {
-                    config_file: config_dir.join("config.toml"),
-                    config_dir,
-                    models_dir: data_dir.join("models"),
-                    db_file: data_dir.join("hivebear.db"),
-                    data_dir,
-                    benchmark_cache: cache_dir.join("benchmark.json"),
-                    cache_dir,
+        // Priority 3: Standard ProjectDirs (Desktop Linux, Windows, macOS)
+        #[cfg(not(target_os = "android"))]
+        {
+            let dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION);
+
+            match dirs {
+                Some(dirs) => {
+                    let config_dir = dirs.config_dir().to_path_buf();
+                    let data_dir = dirs.data_dir().to_path_buf();
+                    let cache_dir = dirs.cache_dir().to_path_buf();
+
+                    Self {
+                        config_file: config_dir.join("config.toml"),
+                        config_dir,
+                        models_dir: data_dir.join("models"),
+                        db_file: data_dir.join("hivebear.db"),
+                        data_dir,
+                        benchmark_cache: cache_dir.join("benchmark.json"),
+                        cache_dir,
+                    }
+                }
+                None => {
+                    // Fallback to home directory
+                    let home = std::env::var("HOME")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|_| PathBuf::from("."));
+                    let base = home.join(".hivebear");
+                    Self::from_base(base)
                 }
             }
-            None => {
-                // Fallback to home directory
-                let home = std::env::var("HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|_| PathBuf::from("."));
-                let base = home.join(".hivebear");
+        }
+    }
 
-                Self {
-                    config_dir: base.join("config"),
-                    config_file: base.join("config").join("config.toml"),
-                    data_dir: base.join("data"),
-                    models_dir: base.join("data").join("models"),
-                    db_file: base.join("data").join("hivebear.db"),
-                    cache_dir: base.join("cache"),
-                    benchmark_cache: base.join("cache").join("benchmark.json"),
-                }
-            }
+    /// Construct paths relative to a single base directory.
+    pub fn from_base(base: PathBuf) -> Self {
+        Self {
+            config_dir: base.join("config"),
+            config_file: base.join("config").join("config.toml"),
+            data_dir: base.join("data"),
+            models_dir: base.join("data").join("models"),
+            db_file: base.join("data").join("hivebear.db"),
+            cache_dir: base.join("cache"),
+            benchmark_cache: base.join("cache").join("benchmark.json"),
         }
     }
 

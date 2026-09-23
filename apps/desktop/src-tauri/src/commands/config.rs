@@ -26,7 +26,7 @@ pub fn save_config(state: State<'_, AppState>, new_config: Config) -> CmdResult<
         .map_err(|_| String::from("Config lock poisoned"))?;
     *config = new_config;
     config
-        .save()
+        .save_to(&state.paths.config_file)
         .map_err(|e| format!("Failed to save config: {e}"))
 }
 
