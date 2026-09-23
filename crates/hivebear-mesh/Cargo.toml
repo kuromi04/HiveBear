@@ -8,7 +8,7 @@ description = "P2P distributed inference mesh for HiveBear"
 [dependencies]
 # Workspace siblings
 hivebear-core = { path = "../hivebear-core" }
-hivebear-inference = { path = "../hivebear-inference" }
+hivebear-inference = { path = "../hivebear-inference", default-features = false }
 
 # Async runtime
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time"] }
