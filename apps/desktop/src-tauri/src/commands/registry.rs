@@ -35,6 +35,11 @@ pub async fn install_model(
 }
 
 #[tauri::command]
+pub async fn cancel_download(state: State<'_, AppState>, model_id: String) -> CmdResult<bool> {
+    Ok(state.registry.cancel_download(&model_id))
+}
+
+#[tauri::command]
 pub async fn list_installed(state: State<'_, AppState>) -> CmdResult<Vec<ModelMetadata>> {
     Ok(state.registry.list_installed().await)
 }

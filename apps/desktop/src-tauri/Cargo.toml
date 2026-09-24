@@ -38,9 +38,8 @@ llamacpp-metal = ["llamacpp", "hivebear-inference/llamacpp-metal"]
 llamacpp-cuda = ["llamacpp", "hivebear-inference/llamacpp-cuda"]
 llamacpp-vulkan = ["llamacpp", "hivebear-inference/llamacpp-vulkan"]
 candle = ["hivebear-inference/candle"]
-# Mobile: no local inference engines initially (Candle has ARM FP16 build issues).
-# Enables mesh participation, model browsing, and chat via remote inference.
-mobile = []
+# Mobile: pure Rust Candle backend enabled for local GGUF inference + mesh participation.
+mobile = ["candle"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

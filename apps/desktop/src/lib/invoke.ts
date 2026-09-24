@@ -98,6 +98,10 @@ export function installModel(modelId: string, quant?: string): Promise<Installed
   return invoke("install_model", { modelId, quant });
 }
 
+export function cancelDownload(modelId: string): Promise<boolean> {
+  return invoke("cancel_download", { modelId }, { silent: true });
+}
+
 export function listInstalled(): Promise<ModelMetadata[]> {
   return invoke("list_installed");
 }

@@ -3,8 +3,11 @@ use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::watch;
 
 /// Progress information for download callbacks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,10 +28,11 @@ pub struct PartialMeta {
     started_at: DateTime<Utc>,
 }
 
-/// Manages model file downloads with resume support.
+/// Manages model file downloads with resume support and cancellation.
 pub struct DownloadManager {
     client: reqwest::Client,
     models_dir: PathBuf,
+    cancellations: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
 }
 
 impl DownloadManager {
@@ -43,7 +47,22 @@ impl DownloadManager {
             .build()
             .unwrap_or_default();
 
-        Self { client, models_dir }
+        Self {
+            client,
+            models_dir,
+            cancellations: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// Cancel an active download by model ID or filename.
+    pub fn cancel_download(&self, model_id: &str) -> bool {
+        let mut map = self.cancellations.lock().unwrap_or_else(|e| e.into_inner());
+        let mut cancelled = false;
+        if let Some(tx) = map.remove(model_id) {
+            let _ = tx.send(true);
+            cancelled = true;
+        }
+        cancelled
     }
 
     /// Send an HTTP GET with retry logic for transient errors (429, 5xx).
@@ -125,7 +144,7 @@ impl DownloadManager {
         unreachable!()
     }
 
-    /// Download a file with resume support and optional SHA-256 verification.
+    /// Download a file with resume support, cancellation, and optional SHA-256 verification.
     pub async fn download(
         &self,
         url: &str,
@@ -145,6 +164,23 @@ impl DownloadManager {
 
         let partial_path = dest_dir.join(format!("{filename}.partial"));
         let meta_path = dest_dir.join(format!("{filename}.partial.meta"));
+
+        // Register cancellation channel
+        let (cancel_tx, cancel_rx) = watch::channel(false);
+        {
+            let mut map = self.cancellations.lock().unwrap_or_else(|e| e.into_inner());
+            map.insert(model_id.to_string(), cancel_tx);
+        }
+
+        // Helper cleanup closure to unregister cancellation sender & remove partial files on error/cancel
+        let cleanup_on_exit = |is_error: bool| {
+            let mut map = self.cancellations.lock().unwrap_or_else(|e| e.into_inner());
+            map.remove(model_id);
+            if is_error {
+                let _ = std::fs::remove_file(&meta_path);
+                let _ = std::fs::remove_file(&partial_path);
+            }
+        };
 
         // Check for existing partial download
         let mut bytes_downloaded: u64;
@@ -184,6 +220,13 @@ impl DownloadManager {
         let mut last_emit = std::time::Instant::now();
 
         loop {
+            if *cancel_rx.borrow() {
+                cleanup_on_exit(true);
+                return Err(RegistryError::DownloadError(
+                    "Download cancelled by user".to_string(),
+                ));
+            }
+
             // Sync bytes_downloaded with actual file length on disk before requesting
             if partial_path.exists() {
                 bytes_downloaded = tokio::fs::metadata(&partial_path)
@@ -202,9 +245,15 @@ impl DownloadManager {
                         tracing::warn!("HTTP 416 Range Not Satisfiable, resetting partial file");
                         tokio::fs::remove_file(&partial_path).await.ok();
                         bytes_downloaded = 0;
-                        self.send_with_retry(url, 0, 3).await?
+                        match self.send_with_retry(url, 0, 3).await {
+                            Ok(resp) => resp,
+                            Err(e2) => {
+                                cleanup_on_exit(true);
+                                return Err(e2);
+                            }
+                        }
                     } else {
-                        tokio::fs::remove_file(&meta_path).await.ok();
+                        cleanup_on_exit(true);
                         return Err(e);
                     }
                 }
@@ -226,19 +275,25 @@ impl DownloadManager {
             };
 
             // Open file for append if 206 Partial Content, or write/truncate if 200 OK
-            let mut file = if is_partial && bytes_downloaded > 0 {
+            let mut file = match if is_partial && bytes_downloaded > 0 {
                 tokio::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open(&partial_path)
-                    .await?
+                    .await
             } else {
                 tokio::fs::OpenOptions::new()
                     .create(true)
                     .write(true)
                     .truncate(true)
                     .open(&partial_path)
-                    .await?
+                    .await
+            } {
+                Ok(f) => f,
+                Err(e) => {
+                    cleanup_on_exit(true);
+                    return Err(RegistryError::from(e));
+                }
             };
 
             let mut stream = response.bytes_stream();
@@ -247,9 +302,19 @@ impl DownloadManager {
             let mut stream_error = false;
 
             while let Some(chunk_res) = stream.next().await {
+                if *cancel_rx.borrow() {
+                    cleanup_on_exit(true);
+                    return Err(RegistryError::DownloadError(
+                        "Download cancelled by user".to_string(),
+                    ));
+                }
+
                 match chunk_res {
                     Ok(chunk) => {
-                        file.write_all(&chunk).await?;
+                        if let Err(e) = file.write_all(&chunk).await {
+                            cleanup_on_exit(true);
+                            return Err(RegistryError::from(e));
+                        }
                         bytes_downloaded += chunk.len() as u64;
 
                         if let Some(cb) = progress_cb {
@@ -281,7 +346,7 @@ impl DownloadManager {
                 }
             }
 
-            file.flush().await?;
+            let _ = file.flush().await;
             drop(file);
 
             if !stream_error {
@@ -290,6 +355,7 @@ impl DownloadManager {
 
             max_stream_retries -= 1;
             if max_stream_retries == 0 {
+                cleanup_on_exit(true);
                 return Err(RegistryError::DownloadError(
                     "Max stream retries exceeded".to_string(),
                 ));
@@ -301,12 +367,25 @@ impl DownloadManager {
         // Final verification: SHA-256 on completed partial file if expected
         if let Some(expected) = expected_sha256 {
             tracing::info!("Verifying SHA-256 checksum for {}", filename);
-            let mut file = tokio::fs::File::open(&partial_path).await?;
+            let mut file = match tokio::fs::File::open(&partial_path).await {
+                Ok(f) => f,
+                Err(e) => {
+                    cleanup_on_exit(true);
+                    return Err(RegistryError::from(e));
+                }
+            };
+
             let mut hasher = Sha256::new();
             let mut buffer = vec![0u8; 1024 * 1024]; // 1MB buffer
 
             loop {
-                let n = file.read(&mut buffer).await?;
+                let n = match file.read(&mut buffer).await {
+                    Ok(n) => n,
+                    Err(e) => {
+                        cleanup_on_exit(true);
+                        return Err(RegistryError::from(e));
+                    }
+                };
                 if n == 0 {
                     break;
                 }
@@ -315,8 +394,7 @@ impl DownloadManager {
 
             let actual = format!("{:x}", hasher.finalize());
             if actual.to_lowercase() != expected.to_lowercase() {
-                tokio::fs::remove_file(&partial_path).await.ok();
-                tokio::fs::remove_file(&meta_path).await.ok();
+                cleanup_on_exit(true);
                 return Err(RegistryError::IntegrityError {
                     path: partial_path,
                     expected: expected.to_string(),
@@ -326,8 +404,13 @@ impl DownloadManager {
         }
 
         // Move partial to final
-        tokio::fs::rename(&partial_path, &final_path).await?;
+        if let Err(e) = tokio::fs::rename(&partial_path, &final_path).await {
+            cleanup_on_exit(true);
+            return Err(RegistryError::from(e));
+        }
+
         tokio::fs::remove_file(&meta_path).await.ok();
+        cleanup_on_exit(false);
 
         Ok(final_path)
     }

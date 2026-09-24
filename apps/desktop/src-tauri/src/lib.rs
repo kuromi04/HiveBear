@@ -56,6 +56,7 @@ pub fn run() {
             commands::profile::get_recommendations,
             commands::registry::search_models,
             commands::registry::install_model,
+            commands::registry::cancel_download,
             commands::registry::list_installed,
             commands::registry::remove_model,
             commands::registry::get_storage_report,

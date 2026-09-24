@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { DownloadProgress, InstalledInfo, ModelMetadata, SearchResult } from "../types";
-import { installModel, listInstalled, removeModel, searchModels } from "../lib/invoke";
+import { cancelDownload, installModel, listInstalled, removeModel, searchModels } from "../lib/invoke";
 
 export function useModelSearch() {
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -64,7 +64,18 @@ export function useModelInstall() {
     }
   }, []);
 
-  return { installing, progress, error, install };
+  const cancel = useCallback(async (modelId?: string) => {
+    const target = modelId || installing;
+    if (target) {
+      await cancelDownload(target);
+      setInstalling(null);
+      setProgress(null);
+    }
+  }, [installing]);
+
+  const clearError = useCallback(() => setError(null), []);
+
+  return { installing, progress, error, install, cancel, clearError };
 }
 
 export function useModelRemove() {

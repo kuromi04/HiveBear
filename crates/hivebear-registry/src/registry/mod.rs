@@ -130,6 +130,11 @@ impl Registry {
         Ok(results)
     }
 
+    /// Cancel an active model download by ID.
+    pub fn cancel_download(&self, model_id: &str) -> bool {
+        self.downloader.cancel_download(model_id)
+    }
+
     /// Install a model by ID.
     pub async fn install(
         &self,
@@ -179,24 +184,27 @@ impl Registry {
 
         let size_bytes = tokio::fs::metadata(&model_path).await?.len();
 
-        // Also download tokenizer.json if available (needed by Candle backend)
-        let tokenizer_url = format!(
-            "https://huggingface.co/{}/resolve/main/tokenizer.json",
-            repo_id
-        );
-        if let Err(e) = self
-            .downloader
-            .download(
-                &tokenizer_url,
-                &model_dir,
-                "tokenizer.json",
-                None,
-                model_id,
-                None,
-            )
-            .await
-        {
-            tracing::debug!("No tokenizer.json available: {e}");
+        // GGUF models embed their tokenizer metadata directly inside the GGUF header.
+        // For non-GGUF models, attempt to download tokenizer.json if available.
+        if !file.filename.ends_with(".gguf") {
+            let tokenizer_url = format!(
+                "https://huggingface.co/{}/resolve/main/tokenizer.json",
+                repo_id
+            );
+            if let Err(e) = self
+                .downloader
+                .download(
+                    &tokenizer_url,
+                    &model_dir,
+                    "tokenizer.json",
+                    None,
+                    model_id,
+                    None,
+                )
+                .await
+            {
+                tracing::debug!("No tokenizer.json available: {e}");
+            }
         }
 
         // Build installed info
