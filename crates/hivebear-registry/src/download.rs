@@ -4,7 +4,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Progress information for download callbacks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,7 +34,12 @@ pub struct DownloadManager {
 impl DownloadManager {
     pub fn new(models_dir: PathBuf) -> Self {
         let client = reqwest::Client::builder()
-            .user_agent("hivebear/0.1.0")
+            .user_agent("hivebear/0.2.14")
+            .connect_timeout(std::time::Duration::from_secs(15))
+            .read_timeout(std::time::Duration::from_secs(30))
+            .tcp_keepalive(std::time::Duration::from_secs(15))
+            .pool_idle_timeout(std::time::Duration::from_secs(90))
+            .pool_max_idle_per_host(5)
             .build()
             .unwrap_or_default();
 
@@ -92,6 +97,7 @@ impl DownloadManager {
                             "Access denied (HTTP {status}). You may need to set HF_TOKEN for gated models."
                         ),
                         404 => "File not found (HTTP 404). The model file may have been moved or renamed.".to_string(),
+                        416 => "Requested range not satisfiable (HTTP 416).".to_string(),
                         429 => "Rate limited (HTTP 429). Try again in a few minutes, or set HF_TOKEN for higher limits.".to_string(),
                         _ => format!("HTTP {status} for {url}"),
                     };
@@ -141,26 +147,20 @@ impl DownloadManager {
         let meta_path = dest_dir.join(format!("{filename}.partial.meta"));
 
         // Check for existing partial download
-        let mut bytes_downloaded: u64 = 0;
-        let mut hasher = Sha256::new();
+        let mut bytes_downloaded: u64;
 
         if partial_path.exists() && meta_path.exists() {
             // Read partial metadata
-            let meta_contents = tokio::fs::read_to_string(&meta_path).await?;
-            if let Ok(meta) = serde_json::from_str::<PartialMeta>(&meta_contents) {
-                if meta.url == url {
-                    bytes_downloaded = tokio::fs::metadata(&partial_path).await?.len();
-                    tracing::info!("Resuming download from {} bytes", bytes_downloaded);
-
-                    // Re-hash the existing partial file for integrity
-                    if expected_sha256.is_some() {
-                        let existing = tokio::fs::read(&partial_path).await?;
-                        hasher.update(&existing);
+            if let Ok(meta_contents) = tokio::fs::read_to_string(&meta_path).await {
+                if let Ok(meta) = serde_json::from_str::<PartialMeta>(&meta_contents) {
+                    if meta.url == url {
+                        let bytes = tokio::fs::metadata(&partial_path).await.map(|m| m.len()).unwrap_or(0);
+                        tracing::info!("Resuming download from {} bytes", bytes);
+                    } else {
+                        // URL changed, start fresh
+                        tokio::fs::remove_file(&partial_path).await.ok();
+                        tokio::fs::remove_file(&meta_path).await.ok();
                     }
-                } else {
-                    // URL changed, start fresh
-                    tokio::fs::remove_file(&partial_path).await.ok();
-                    tokio::fs::remove_file(&meta_path).await.ok();
                 }
             }
         }
@@ -177,20 +177,63 @@ impl DownloadManager {
         let meta_json = serde_json::to_string(&meta)?;
         tokio::fs::write(&meta_path, &meta_json).await?;
 
-        // Start resilient download loop
         let mut max_stream_retries = 5;
+        let mut last_emit = std::time::Instant::now();
+
         loop {
-            // Build request with Range header for resume, with retry on transient errors
-            let response = self.send_with_retry(url, bytes_downloaded, 3).await?;
+            // Sync bytes_downloaded with actual file length on disk before requesting
+            if partial_path.exists() {
+                bytes_downloaded = tokio::fs::metadata(&partial_path).await.map(|m| m.len()).unwrap_or(0);
+            } else {
+                bytes_downloaded = 0;
+            }
 
-            let total_bytes = response.content_length().map(|cl| cl + bytes_downloaded);
+            let response = match self.send_with_retry(url, bytes_downloaded, 3).await {
+                Ok(resp) => resp,
+                Err(e) => {
+                    // If range not satisfiable (HTTP 416) or corrupted offset, clear partial file & retry from 0
+                    if bytes_downloaded > 0 && e.to_string().contains("416") {
+                        tracing::warn!("HTTP 416 Range Not Satisfiable, resetting partial file");
+                        tokio::fs::remove_file(&partial_path).await.ok();
+                        bytes_downloaded = 0;
+                        self.send_with_retry(url, 0, 3).await?
+                    } else {
+                        tokio::fs::remove_file(&meta_path).await.ok();
+                        return Err(e);
+                    }
+                }
+            };
 
-            // Open file for appending (resume) or creating
-            let mut file = tokio::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&partial_path)
-                .await?;
+            let status = response.status();
+            let is_partial = status == reqwest::StatusCode::PARTIAL_CONTENT;
+
+            // If server returned 200 OK (Full Content), server ignored Range or redirected. Reset offset & truncate file!
+            if status == reqwest::StatusCode::OK && bytes_downloaded > 0 {
+                tracing::info!("Server returned 200 OK (Full Content). Resetting offset to 0.");
+                bytes_downloaded = 0;
+            }
+
+            let total_bytes = if is_partial {
+                response.content_length().map(|cl| cl + bytes_downloaded)
+            } else {
+                response.content_length()
+            };
+
+            // Open file for append if 206 Partial Content, or write/truncate if 200 OK
+            let mut file = if is_partial && bytes_downloaded > 0 {
+                tokio::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&partial_path)
+                    .await?
+            } else {
+                tokio::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(&partial_path)
+                    .await?
+            };
 
             let mut stream = response.bytes_stream();
             let start_time = std::time::Instant::now();
@@ -201,27 +244,27 @@ impl DownloadManager {
                 match chunk_res {
                     Ok(chunk) => {
                         file.write_all(&chunk).await?;
-
-                        if expected_sha256.is_some() {
-                            hasher.update(&chunk);
-                        }
-
                         bytes_downloaded += chunk.len() as u64;
 
                         if let Some(cb) = progress_cb {
-                            let elapsed = start_time.elapsed().as_secs_f64();
-                            // Calculate speed based on bytes downloaded in this session (not total)
-                            let session_bytes = bytes_downloaded - bytes_at_start;
-                            let bps = if elapsed > 0.0 {
-                                session_bytes as f64 / elapsed
-                            } else {
-                                0.0
-                            };
-                            cb(DownloadProgress {
-                                bytes_downloaded,
-                                total_bytes,
-                                bytes_per_sec: bps,
-                            });
+                            let now = std::time::Instant::now();
+                            let is_finished = total_bytes.map_or(false, |tb| bytes_downloaded >= tb);
+                            // Throttle progress events to ~10 Hz (every 100ms) to prevent Android Webview IPC flooding
+                            if now.duration_since(last_emit).as_millis() >= 100 || is_finished {
+                                last_emit = now;
+                                let elapsed = start_time.elapsed().as_secs_f64();
+                                let session_bytes = bytes_downloaded.saturating_sub(bytes_at_start);
+                                let bps = if elapsed > 0.0 {
+                                    session_bytes as f64 / elapsed
+                                } else {
+                                    0.0
+                                };
+                                cb(DownloadProgress {
+                                    bytes_downloaded,
+                                    total_bytes,
+                                    bytes_per_sec: bps,
+                                });
+                            }
                         }
                     }
                     Err(e) => {
@@ -246,14 +289,28 @@ impl DownloadManager {
                 ));
             }
 
-            // Wait a moment before resuming
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
 
-        // Verify SHA-256 if expected
+        // Final verification: SHA-256 on completed partial file if expected
         if let Some(expected) = expected_sha256 {
+            tracing::info!("Verifying SHA-256 checksum for {}", filename);
+            let mut file = tokio::fs::File::open(&partial_path).await?;
+            let mut hasher = Sha256::new();
+            let mut buffer = vec![0u8; 1024 * 1024]; // 1MB buffer
+
+            loop {
+                let n = file.read(&mut buffer).await?;
+                if n == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..n]);
+            }
+
             let actual = format!("{:x}", hasher.finalize());
-            if actual != expected {
+            if actual.to_lowercase() != expected.to_lowercase() {
+                tokio::fs::remove_file(&partial_path).await.ok();
+                tokio::fs::remove_file(&meta_path).await.ok();
                 return Err(RegistryError::IntegrityError {
                     path: partial_path,
                     expected: expected.to_string(),
