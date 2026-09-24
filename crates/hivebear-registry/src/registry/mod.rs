@@ -39,7 +39,7 @@ impl Registry {
         // If config.models_dir is invalid or read-only (e.g. root / or relative on mobile),
         // fallback to paths.models_dir which is guaranteed to be writable
         let models_dir = if config.models_dir.as_os_str().is_empty()
-            || config.models_dir == std::path::PathBuf::from(".")
+            || config.models_dir == std::path::Path::new(".")
             || !config.models_dir.is_absolute()
             || (cfg!(target_os = "android") && !config.models_dir.starts_with("/data/"))
         {

@@ -154,7 +154,10 @@ impl DownloadManager {
             if let Ok(meta_contents) = tokio::fs::read_to_string(&meta_path).await {
                 if let Ok(meta) = serde_json::from_str::<PartialMeta>(&meta_contents) {
                     if meta.url == url {
-                        let bytes = tokio::fs::metadata(&partial_path).await.map(|m| m.len()).unwrap_or(0);
+                        let bytes = tokio::fs::metadata(&partial_path)
+                            .await
+                            .map(|m| m.len())
+                            .unwrap_or(0);
                         tracing::info!("Resuming download from {} bytes", bytes);
                     } else {
                         // URL changed, start fresh
@@ -183,7 +186,10 @@ impl DownloadManager {
         loop {
             // Sync bytes_downloaded with actual file length on disk before requesting
             if partial_path.exists() {
-                bytes_downloaded = tokio::fs::metadata(&partial_path).await.map(|m| m.len()).unwrap_or(0);
+                bytes_downloaded = tokio::fs::metadata(&partial_path)
+                    .await
+                    .map(|m| m.len())
+                    .unwrap_or(0);
             } else {
                 bytes_downloaded = 0;
             }
@@ -248,7 +254,7 @@ impl DownloadManager {
 
                         if let Some(cb) = progress_cb {
                             let now = std::time::Instant::now();
-                            let is_finished = total_bytes.map_or(false, |tb| bytes_downloaded >= tb);
+                            let is_finished = total_bytes.is_some_and(|tb| bytes_downloaded >= tb);
                             // Throttle progress events to ~10 Hz (every 100ms) to prevent Android Webview IPC flooding
                             if now.duration_since(last_emit).as_millis() >= 100 || is_finished {
                                 last_emit = now;

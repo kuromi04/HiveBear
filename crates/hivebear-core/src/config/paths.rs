@@ -24,7 +24,9 @@ impl AppPaths {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new() -> Self {
         // Priority 1: Explicit environment overrides (e.g. set by Tauri on mobile or Termux)
-        if let Ok(dir) = std::env::var("HIVEBEAR_HOME").or_else(|_| std::env::var("HIVEBEAR_DATA_DIR")) {
+        if let Ok(dir) =
+            std::env::var("HIVEBEAR_HOME").or_else(|_| std::env::var("HIVEBEAR_DATA_DIR"))
+        {
             let base = PathBuf::from(dir);
             return Self::from_base(base);
         }
