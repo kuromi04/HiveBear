@@ -84,16 +84,22 @@ export default function ModelBrowser() {
 
         {/* Download progress & error handling */}
         {(installing || installError) && (
-    <div className="shrink-0 px-6 pt-4">
-      <DownloadProgress 
-        modelId={installing || "Model"} 
-        progress={progress} 
-        error={installError}
-        onCancel={() => { cancel(); clearError(); }}
-        onRetry={installing ? undefined : () => { const id = installing; clearError(); if (id) install(id); }}
-      />
-    </div>
-  )}
+          <div className="shrink-0 px-6 pt-4">
+            <DownloadProgress 
+              modelId={installing || "Model"} 
+              progress={progress} 
+              error={installError}
+              onCancel={() => { cancel(); clearError(); }}
+              onRetry={installing ? undefined : () => { const id = installing; clearError(); if (id) install(id); }}
+            />
+          </div>
+        )}
+
+        {searchError && (
+          <div className="mx-6 mt-4 rounded-[var(--radius-md)] border border-danger/30 bg-danger/10 px-4 py-2 text-sm text-danger">
+            {searchError}
+          </div>
+        )}
 
         {/* Results */}
         <div className="flex-1 overflow-y-auto p-6 pt-4">
