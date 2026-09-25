@@ -11,25 +11,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Mermaid.js for Diagrams -->
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({
-            startOnLoad: true,
-            theme: 'dark',
-            themeVariables: {
-                darkMode: true,
-                background: '#090c14',
-                primaryColor: '#00f5d4',
-                primaryTextColor: '#ffffff',
-                primaryBorderColor: '#00f5d4',
-                lineColor: '#00f5d4',
-                secondaryColor: '#f72585',
-                tertiaryColor: '#131726'
-            }
-        });
-    </script>
-    
     <style>
         :root {
             /* Vercel / Stripe Inspired Obsidian & Glass Palette */
@@ -371,14 +352,179 @@
             color: var(--cyan);
         }
 
-        .diagram-container {
-            background: #090c14;
+        /* Ultra-Professional Visual P2P Diagram for Noobs */
+        .visual-p2p-container {
+            background: linear-gradient(135deg, rgba(9, 12, 20, 0.95), rgba(15, 20, 32, 0.95));
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem 1.5rem;
+            margin: 2rem 0;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0, 245, 212, 0.03);
+        }
+
+        .visual-mesh-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 1.5rem;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .visual-node-card {
+            background: rgba(18, 24, 38, 0.85);
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-md);
-            padding: 2rem 1.5rem;
-            margin: 2rem 0;
-            overflow-x: auto;
+            padding: 1.75rem 1.25rem;
+            backdrop-filter: blur(12px);
+            transition: var(--transition);
             text-align: center;
+            position: relative;
+        }
+
+        .visual-node-card:hover {
+            border-color: var(--cyan);
+            box-shadow: 0 0 30px var(--cyan-glow);
+            transform: translateY(-4px);
+        }
+
+        .node-icon-large {
+            font-size: 2.8rem;
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+
+        .node-title-bold {
+            font-weight: 800;
+            font-size: 1.15rem;
+            color: #fff;
+            margin-bottom: 0.25rem;
+        }
+
+        .node-subtext {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.25rem;
+            line-height: 1.4;
+        }
+
+        .node-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 0.35rem 0.85rem;
+            border-radius: var(--radius-full);
+            background: rgba(0, 245, 212, 0.1);
+            color: var(--cyan);
+            border: 1px solid rgba(0, 245, 212, 0.3);
+        }
+
+        .tunnel-bridge {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 0;
+            min-width: 180px;
+        }
+
+        .cloud-signaling {
+            background: rgba(114, 9, 183, 0.18);
+            border: 1px solid rgba(114, 9, 183, 0.4);
+            color: #e9d5ff;
+            font-size: 0.75rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 0.4rem 0.9rem;
+            border-radius: var(--radius-full);
+            margin-bottom: 0.75rem;
+            box-shadow: 0 0 15px rgba(114, 9, 183, 0.2);
+        }
+
+        .tunnel-beam {
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--cyan), var(--emerald), var(--cyan));
+            border-radius: var(--radius-full);
+            box-shadow: 0 0 15px var(--cyan);
+            margin: 0.75rem 0;
+            position: relative;
+            animation: beam-pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes beam-pulse {
+            0% { opacity: 0.5; filter: drop-shadow(0 0 4px var(--cyan)); }
+            50% { opacity: 1; filter: drop-shadow(0 0 16px var(--emerald)); }
+            100% { opacity: 0.5; filter: drop-shadow(0 0 4px var(--cyan)); }
+        }
+
+        .tunnel-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--emerald);
+            font-weight: 700;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-full);
+        }
+
+        /* 1-2-3 Step Infographic Grid */
+        .noob-steps-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.25rem;
+            margin-top: 2.25rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .noob-step-card {
+            background: rgba(13, 16, 26, 0.8);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            text-align: left;
+            transition: var(--transition);
+        }
+
+        .noob-step-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(18, 24, 38, 0.9);
+        }
+
+        .step-badge {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--cyan), var(--cyan-dark));
+            color: #04060a;
+            font-weight: 800;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.85rem;
+            box-shadow: 0 0 15px var(--cyan-glow);
+        }
+
+        .step-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 0.4rem;
+        }
+
+        .step-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
         }
 
         ul.feature-list {
@@ -498,6 +644,8 @@
 
         @media (max-width: 768px) {
             .nav-links { display: none; }
+            .visual-mesh-grid { grid-template-columns: 1fr; }
+            .noob-steps-grid { grid-template-columns: 1fr; }
             .footer-grid { grid-template-columns: 1fr; }
             .footer-bottom { flex-direction: column; gap: 1rem; text-align: center; }
             .card { padding: 1.75rem; }
@@ -548,7 +696,7 @@
                 Cómo Funciona la <span class="gradient-title">Red P2P de HiveBear</span>
             </h1>
             <p class="page-subtitle">
-                Una guía visual detallada sobre cómo conectamos dispositivos, dividimos modelos GGUF pesados y garantizamos privacidad total mediante Rust y QUIC.
+                Una guía súper clara y accesible para entender cómo conectamos dispositivos, compartimos potencia de procesamiento y mantenemos tu información 100% privada.
             </p>
         </div>
 
@@ -556,39 +704,80 @@
         <div class="card">
             <div class="card-header">
                 <div class="card-icon">🧩</div>
-                <h2 class="card-title">1. El Concepto P2P de Inteligencia Artificial</h2>
+                <h2 class="card-title">1. El Concepto P2P Explicado Fáci</h2>
             </div>
             <p>
-                Los modelos modernos de Inteligencia Artificial (como Qwen 2.5, Llama 3.2 o DeepSeek) son <strong>estructuras de tensores gigantescas con miles de millones de parámetros</strong>. Ejecutarlos individualmente en un teléfono inteligente o en una laptop básica suele consumir toda la memoria RAM y agotar la batería en minutos.
+                Piensa en un modelo de Inteligencia Artificial (como ChatGPT o Qwen 2.5) como un <strong>libro gigante de 5,000 páginas</strong>. Si intentas leerlo y procesarlo completo en la pequeña memoria de tu teléfono inteligente, el celular se sobrecalentará, se congelará y agotará su batería.
             </p>
             
             <div class="highlight-box">
-                <strong>La Solución Distribuida:</strong> En lugar de enviar tus datos a un servidor central cerrado de una gran corporación, HiveBear fragmenta o distribuye las cargas de cálculo entre pares de la red P2P. Cada nodo procesa matrices matemáticas en milisegundos y devuelve la inferencia cifrada directamente a tu pantalla.
+                <strong>La Magia de la Red P2P (Persona a Persona):</strong> En lugar de enviarle tus datos a una mega-corporación que cobra por cada pregunta, HiveBear conecta tu teléfono con computadoras potentes de otros usuarios de la manada. Ellas leen las páginas pesadas por ti en milisegundos y te envían la respuesta lista a tu pantalla.
             </div>
         </div>
 
-        <!-- Section 2 -->
+        <!-- Section 2 (Ultra Professional Visual Diagram for Noobs) -->
         <div class="card">
             <div class="card-header">
                 <div class="card-icon card-icon-magenta">🌐</div>
-                <h2 class="card-title">2. Flujo de Datos & Diagrama de Red P2P</h2>
+                <h2 class="card-title">2. Diagrama Visual de Conexión en Vivo</h2>
             </div>
             <p>
-                La arquitectura desarrollada por <strong>@kuromi04</strong> conecta clientes ligeros (smartphones o laptops) con nodos potentes (PCs con GPU o servidores) a través de túneles directos:
+                Así viaja tu pregunta desde tu teléfono o computadora portátil hacia la red privada de HiveBear:
             </p>
 
-            <div class="diagram-container">
-                <pre class="mermaid">
-graph TD
-    subgraph Red P2P Descentralizada HiveBear
-        A[📱 Android APK / Termux <br> Cliente Móvil Lote Lero] <-->|Señal STUN/TURN| B((☁️ Coordinador P2P <br> Descubrimiento & Signaling))
-        C[💻 PC Windows / Linux <br> GPU NVIDIA / AMD / Candle Engine] <-->|Anuncia Capacidad GPU| B
-        D[🍏 macOS Apple Silicon <br> GPU Metal / M1-M4 CPU] <-->|Anuncia Capacidad CPU| B
-        
-        A == "🌐 Túnel Directo Cifrado QUIC TLS 1.3" ==> C
-        A == "🌐 Túnel Directo Cifrado QUIC TLS 1.3" ==> D
-    end
-                </pre>
+            <!-- Custom Interactive Visual Infographic -->
+            <div class="visual-p2p-container">
+                <div class="visual-mesh-grid">
+                    
+                    <!-- Left Node: Mobile Client -->
+                    <div class="visual-node-card">
+                        <span class="node-icon-large">📱</span>
+                        <div class="node-title-bold">Tu Teléfono / Laptop</div>
+                        <div class="node-subtext">Cliente Ligero (Android / Web)<br><i>No sufre ni se sobrecalienta</i></div>
+                        <span class="node-status-badge">
+                            <span class="live-pulse"></span> 💬 Petición Enviada
+                        </span>
+                    </div>
+
+                    <!-- Center: Tunnel & Signaling -->
+                    <div class="tunnel-bridge">
+                        <div class="cloud-signaling">☁️ Coordinador (Solo une los nodos)</div>
+                        <div class="tunnel-beam"></div>
+                        <span class="tunnel-label">⚡ Túnel QUIC TLS 1.3 (100% Cifrado)</span>
+                    </div>
+
+                    <!-- Right Node: Compute Node -->
+                    <div class="visual-node-card">
+                        <span class="node-icon-large">💻</span>
+                        <div class="node-title-bold">PC Gamer / Servidor</div>
+                        <div class="node-subtext">Nodo Potente con GPU / Mac<br><i>Procesa los tensores pesados</i></div>
+                        <span class="node-status-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--emerald); border-color: rgba(16, 185, 129, 0.3);">
+                            🔥 GPU Acelerada + Karma
+                        </span>
+                    </div>
+
+                </div>
+
+                <!-- 1-2-3 Steps Infographic -->
+                <div class="noob-steps-grid">
+                    <div class="noob-step-card">
+                        <div class="step-badge">1</div>
+                        <div class="step-title">Escribes tu Pregunta</div>
+                        <div class="step-desc">Escribes tu prompt en la app de HiveBear. Tu teléfono consume casi nada de energía.</div>
+                    </div>
+
+                    <div class="noob-step-card">
+                        <div class="step-badge">2</div>
+                        <div class="step-title">Túnel Privado e Invisible</div>
+                        <div class="step-desc">Se crea un túnel blindado directo con una PC cercana de la red. Nadie fuera de ese túnel puede leer tu chat.</div>
+                    </div>
+
+                    <div class="noob-step-card">
+                        <div class="step-badge">3</div>
+                        <div class="step-title">Respuesta Instantánea</div>
+                        <div class="step-desc">La PC procesa los números en milisegundos con su GPU y te devuelve la respuesta. ¡Tú ganas la IA y la PC gana Karma!</div>
+                    </div>
+                </div>
             </div>
 
             <ul class="feature-list">
@@ -608,7 +797,7 @@ graph TD
                 En la versión <strong>v0.2.14</strong>, HiveBear integra el motor de inferencia nativo <strong>Candle</strong> de HuggingFace en Rust.
             </p>
             <ul class="feature-list">
-                <li><strong>Cero dependencias C++ / NDK:</strong> Evita problemas de compilación en móviles ARM y garantiza una ejecucion ligera y limpia.</li>
+                <li><strong>Cero dependencias C++ / NDK:</strong> Evita problemas de compilación en móviles ARM y garantiza una ejecución ligera y limpia.</li>
                 <li><strong>Soporte GGUF Directo:</strong> Carga archivos de cuantización `.gguf` (Q4_K_M, Q8, etc.) directamente desde disco sin requerir herramientas externas como Ollama.</li>
                 <li><strong>Consumo Reducido:</strong> Menos de 45 MB de RAM en modo demonio (headless).</li>
             </ul>
