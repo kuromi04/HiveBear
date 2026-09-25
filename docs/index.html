@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HiveBear - Red P2P Descentralizada de Inteligencia Artificial por @kuromi04</title>
-    <meta name="description" content="HiveBear es una red P2P colaborativa de IA escrita en Rust. Inferencia distribuida, privacidad total QUIC, sistema de Karma justo y compatibilidad nativa con Windows, Mac, Linux y Android.">
+    <meta name="description" content="HiveBear es una red P2P colaborativa de IA escrita en Rust. Inferencia distribuida, privacidad total QUIC, sistema de Karma justo y compatibilidad nativa con Windows, Mac, Linux y Android Termux.">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -213,19 +213,27 @@
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 2rem;
+            gap: 1.75rem;
         }
 
         .nav-links a {
             color: var(--text-secondary);
             text-decoration: none;
-            font-size: 0.95rem;
+            font-size: 0.92rem;
             font-weight: 500;
             transition: var(--transition);
         }
 
         .nav-links a:hover {
             color: #fff;
+        }
+
+        .nav-termux-link {
+            color: var(--emerald) !important;
+            font-weight: 700 !important;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
         }
 
         .nav-cta {
@@ -335,6 +343,30 @@
             filter: brightness(1.1);
         }
 
+        .btn-hero-termux {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            font-weight: 700;
+            font-size: 1.05rem;
+            padding: 0.95rem 2rem;
+            border-radius: var(--radius-full);
+            text-decoration: none;
+            transition: var(--transition);
+            backdrop-filter: blur(10px);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .btn-hero-termux:hover {
+            background: rgba(16, 185, 129, 0.3);
+            border-color: var(--emerald);
+            color: #fff;
+            box-shadow: 0 0 25px var(--emerald-glow);
+            transform: translateY(-2px);
+        }
+
         .btn-hero-secondary {
             background: rgba(255, 255, 255, 0.05);
             color: var(--text-main);
@@ -394,6 +426,105 @@
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.82rem;
             color: var(--text-secondary);
+        }
+
+        /* Termux Origin Showcase Hero Banner */
+        .termux-origin-card {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(13, 16, 26, 0.95));
+            border: 2px solid rgba(16, 185, 129, 0.4);
+            border-radius: var(--radius-lg);
+            padding: 3rem 2.5rem;
+            margin: 4rem 0;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 40px rgba(16, 185, 129, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .termux-badge-origin {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--emerald);
+            border: 1px solid rgba(16, 185, 129, 0.5);
+            padding: 0.3rem 0.9rem;
+            border-radius: var(--radius-full);
+            font-size: 0.78rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 1.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .termux-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2.5rem;
+            align-items: center;
+        }
+
+        .termux-title {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 1rem;
+            line-height: 1.25;
+        }
+
+        .termux-desc {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 1.75rem;
+        }
+
+        .termux-cta-box {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-termux-repo {
+            background: var(--emerald);
+            color: #04060a;
+            font-weight: 800;
+            font-size: 1rem;
+            padding: 0.85rem 1.8rem;
+            border-radius: var(--radius-full);
+            text-decoration: none;
+            transition: var(--transition);
+            box-shadow: 0 0 25px var(--emerald-glow);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .btn-termux-repo:hover {
+            transform: translateY(-2px);
+            background: #20e0a0;
+            box-shadow: 0 0 35px rgba(16, 185, 129, 0.45);
+        }
+
+        .termux-code-widget {
+            background: #06080f;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .termux-widget-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--emerald);
+            font-size: 0.82rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 0.5rem;
         }
 
         /* Live Terminal Showcase Mockup */
@@ -735,6 +866,13 @@
             box-shadow: 0 0 25px var(--cyan-glow);
         }
 
+        .hub-tab-btn.tab-termux-highlight.active {
+            background: var(--emerald) !important;
+            color: #04060a !important;
+            border-color: var(--emerald) !important;
+            box-shadow: 0 0 25px var(--emerald-glow) !important;
+        }
+
         .tab-badge-recommended {
             position: absolute;
             top: -10px;
@@ -1055,25 +1193,12 @@
             color: var(--cyan);
         }
 
-        .footer-bottom {
-            border-top: 1px solid var(--border-subtle);
-            padding-top: 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-
-        .footer-bottom span {
-            color: var(--magenta);
-        }
-
         /* Responsive Layout Adjustments */
         @media (max-width: 992px) {
             .bento-grid { grid-template-columns: 1fr; }
             .bento-card-2x { grid-column: span 1; }
             .hub-grid { grid-template-columns: 1fr; }
+            .termux-grid { grid-template-columns: 1fr; }
             .app-previews-grid { grid-template-columns: 1fr; }
             .footer-grid { grid-template-columns: 1fr 1fr; }
             .nav-links { display: none; }
@@ -1107,10 +1232,13 @@
             </a>
 
             <nav class="nav-links">
+                <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="nav-termux-link">
+                    📱 Termux Engine (Origen)
+                </a>
+                <a href="#termux-origin">Termux</a>
                 <a href="#caracteristicas">Características</a>
                 <a href="#capturas">Interfaz</a>
                 <a href="#descargas">Descargas</a>
-                <a href="#comparativa">Comparativa</a>
                 <a href="how-it-works.html">Cómo Funciona</a>
                 <a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener">GitHub</a>
             </nav>
@@ -1129,9 +1257,9 @@
 
         <!-- Hero Section -->
         <section class="hero-section">
-            <a href="https://github.com/kuromi04/HiveBear/releases/tag/v0.2.14" target="_blank" rel="noopener" class="announcement-banner">
-                <span>✨ HiveBear v0.2.14 Lanzado</span>
-                <span style="color: var(--cyan); font-weight: 700;">• Motor Candle Rust & Mobile Nativo →</span>
+            <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="announcement-banner">
+                <span>🔥 TermuxHiveBear • El Origen del Proyecto</span>
+                <span style="color: var(--emerald); font-weight: 700;">• Repositorio Oficial en GitHub →</span>
             </a>
 
             <h1 class="hero-title">
@@ -1139,17 +1267,20 @@
             </h1>
 
             <p class="hero-subtitle">
-                Ejecuta, comparte y distribuye modelos GGUF (Qwen 2.5, Llama 3.2, DeepSeek) directamente entre pares. Sin servidores centrales, 100% privado y cifrado con túneles QUIC TLS 1.3.
+                Nacido en Android vía Termux y expandido a PC. Ejecuta, comparte y distribuye modelos GGUF (Qwen 2.5, Llama 3.2, DeepSeek) directamente entre pares con privacidad QUIC TLS 1.3.
             </p>
 
             <div class="hero-actions">
+                <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="btn-hero-termux">
+                    <span>📱 TermuxHiveBear Repo ⭐</span>
+                </a>
                 <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64-setup.exe" class="btn-hero-primary" id="hero-smart-btn">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     <span id="hero-smart-text">Descargar para Windows</span>
                 </a>
                 <a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener" class="btn-hero-secondary">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                    Ver Código en GitHub
+                    GitHub HiveBear
                 </a>
             </div>
 
@@ -1157,8 +1288,8 @@
             <div class="hero-banner-container">
                 <img src="assets/banner.png" alt="HiveBear Official Banner" class="hero-banner-img">
                 <div class="banner-overlay-bar">
-                    <span>🐻 <strong>HiveBear P2P Mesh Network Engine</strong></span>
-                    <span style="color: var(--cyan);">🟢 1,482 Nodos Activos • QUIC TLS 1.3</span>
+                    <span>🐻 <strong>HiveBear P2P Mesh Engine • Nido Nacido en Termux</strong></span>
+                    <span style="color: var(--emerald);">🟢 1,482 Nodos Activos • QUIC TLS 1.3</span>
                 </div>
             </div>
 
@@ -1176,19 +1307,46 @@
                     </div>
                 </div>
                 <div class="terminal-body" id="term-content-node">
-                    <div><span class="t-dim">[2026-09-25 08:17:40]</span> <span class="t-cyan">INFO</span> <span class="t-bold">hivebear_core::state</span>: Initializing HiveBear Node v0.2.14 (Rust/Candle Engine)</div>
+                    <div><span class="t-dim">[2026-09-25 08:17:40]</span> <span class="t-cyan">INFO</span> <span class="t-bold">hivebear_core::state</span>: Initializing HiveBear Node v0.2.14 (Termux/Rust Engine)</div>
                     <div><span class="t-dim">[2026-09-25 08:17:41]</span> <span class="t-green">SUCCESS</span> <span class="t-bold">hivebear_transport::quic</span>: QUIC listener bound to [::]:4433 (TLS 1.3 E2EE)</div>
-                    <div><span class="t-dim">[2026-09-25 08:17:41]</span> <span class="t-cyan">INFO</span> <span class="t-bold">hivebear_mesh::stun</span>: Hole-punching NAT successful. Public IP endpoint active.</div>
-                    <div><span class="t-dim">[2026-09-25 08:17:42]</span> <span class="t-magenta">KARMA</span> <span class="t-bold">hivebear_karma</span>: Balance: <span class="t-bold t-cyan">+250 pts</span> (Shared GPU compute: 1.4 hrs)</div>
-                    <div><span class="t-dim">[2026-09-25 08:17:43]</span> <span class="t-green">READY</span> Local GGUF Model: <span class="t-bold t-yellow">Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf</span> loaded into Candle memory.</div>
+                    <div><span class="t-dim">[2026-09-25 08:17:41]</span> <span class="t-cyan">INFO</span> <span class="t-bold">hivebear_mesh::stun</span>: Hole-punching NAT successful. Termux Node active.</div>
+                    <div><span class="t-dim">[2026-09-25 08:17:42]</span> <span class="t-magenta">KARMA</span> <span class="t-bold">hivebear_karma</span>: Balance: <span class="t-bold t-cyan">+250 pts</span> (Termux compute node active)</div>
+                    <div><span class="t-dim">[2026-09-25 08:17:43]</span> <span class="t-green">READY</span> Local GGUF Model: <span class="t-bold t-yellow">Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf</span> loaded.</div>
                 </div>
                 <div class="terminal-body" id="term-content-mesh" style="display: none;">
                     <div><span class="t-cyan">➜  hivebear-cli</span> mesh status --verbose</div>
                     <div><span class="t-bold">Active P2P Mesh Network Overview:</span></div>
-                    <div>  • Connected Peers: <span class="t-green t-bold">1,482 active nodes</span></div>
+                    <div>  • Connected Peers: <span class="t-green t-bold">1,482 active nodes (Mobile Termux + Desktop)</span></div>
                     <div>  • Total Network Bandwidth: <span class="t-cyan t-bold">4.2 GB/s</span></div>
                     <div>  • Average Peer Latency: <span class="t-yellow">18.4 ms</span> (Direct QUIC Stream)</div>
-                    <div>  • Distributed Tensor Partitioning: <span class="t-magenta">Enabled (Sharded 70B across 4 peers)</span></div>
+                    <div>  • Distributed Tensor Partitioning: <span class="t-magenta">Enabled (Sharded 70B across peers)</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- DEDICATED TERMUX ORIGIN SPOTLIGHT SECTION -->
+        <section id="termux-origin" class="termux-origin-card">
+            <span class="termux-badge-origin">⭐ EL ORIGEN DEL PROYECTO • CREADO POR @kuromi04</span>
+            <div class="termux-grid">
+                <div>
+                    <h2 class="termux-title">TermuxHiveBear: El Corazón donde Nace la Manada</h2>
+                    <p class="termux-desc">
+                        HiveBear nació originalmente en Android gracias a <strong>Termux</strong>. Esta distribución de la CLI oficial escrita en Rust permite convertir cualquier celular o tablet Android en un nodo servidor de IA las 24 horas del día sin necesidad de permisos Root ni sobrecalentar el procesador.
+                    </p>
+                    <div class="termux-cta-box">
+                        <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="btn-termux-repo">
+                            🚀 Ir al Repositorio TermuxHiveBear ⭐
+                        </a>
+                    </div>
+                </div>
+                <div class="termux-code-widget">
+                    <div class="termux-widget-header">
+                        <span>📱 Instalador Automático de 1 Línea para Termux</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #a7f3d0; word-break: break-all; margin-bottom: 1rem;">
+                        curl -sSL https://raw.githubusercontent.com/kuromi04/TermuxHiveBear/main/install.sh | bash
+                    </div>
+                    <button class="btn-copy" style="background: var(--emerald); color: #04060a;" onclick="copySnippet('curl -sSL https://raw.githubusercontent.com/kuromi04/TermuxHiveBear/main/install.sh | bash', this)">Copiar Comando Termux</button>
                 </div>
             </div>
         </section>
@@ -1205,7 +1363,7 @@
             </div>
             <div class="stat-card">
                 <div class="stat-value gradient-title">4 OS</div>
-                <div class="stat-label">Windows, Android, Mac & Linux</div>
+                <div class="stat-label">Windows, Android Termux, Mac & Linux</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value gradient-title">&lt;45 MB</div>
@@ -1240,10 +1398,10 @@
 
                 <div class="app-preview-card">
                     <div class="app-preview-img-wrapper">
-                        <img src="assets/pawpaw_main.png" alt="Nodo Móvil Android" class="app-preview-img">
+                        <img src="assets/pawpaw_main.png" alt="Nodo Móvil Android Termux" class="app-preview-img">
                     </div>
-                    <div class="app-preview-title">Nodo Móvil & APK Android</div>
-                    <div class="app-preview-desc">Ejecuta la app nativa en tu smartphone para chatear offline o sumar tu teléfono a la red.</div>
+                    <div class="app-preview-title">Nodo Móvil & Termux Android</div>
+                    <div class="app-preview-desc">Ejecuta el nodo nativo en Termux para chatear offline o sumar tu teléfono a la red.</div>
                 </div>
             </div>
         </section>
@@ -1292,13 +1450,13 @@
                 <div class="bento-card">
                     <div>
                         <div class="bento-icon bento-icon-blue">📱</div>
-                        <h3 class="bento-title">Nodos Móviles Nativos (Android)</h3>
+                        <h3 class="bento-title">Nodos Móviles Nativos (Termux / APK)</h3>
                         <p class="bento-desc">
-                            Instala la APK oficial en tu smartphone para chatear offline con modelos GGUF o convertir tu teléfono en un nodo servidor de cómputo background.
+                            Instala el script en Termux o la APK oficial en tu smartphone para chatear offline con modelos GGUF o convertir tu teléfono en un nodo servidor de cómputo background.
                         </p>
                     </div>
                     <div class="bento-visual">
-                        <span class="t-green">✓ Android 8.0+ ARM64/v7</span>
+                        <span class="t-green">✓ Termux + Android 8.0+ ARM64/v7</span>
                     </div>
                 </div>
 
@@ -1328,7 +1486,10 @@
 
             <!-- Hub Selector Tabs -->
             <div class="hub-tabs">
-                <button class="hub-tab-btn active" id="tab-btn-windows" onclick="selectTab('windows')">
+                <button class="hub-tab-btn active tab-termux-highlight" id="tab-btn-termux" onclick="selectTab('termux')">
+                    📱 Termux Engine (Origen)
+                </button>
+                <button class="hub-tab-btn" id="tab-btn-windows" onclick="selectTab('windows')">
                     <span class="tab-badge-recommended" id="badge-os-windows">Tu SO</span>
                     🪟 Windows
                 </button>
@@ -1344,13 +1505,38 @@
                     <span class="tab-badge-recommended" id="badge-os-linux">Tu SO</span>
                     🐧 Linux
                 </button>
-                <button class="hub-tab-btn" id="tab-btn-cli" onclick="selectTab('cli')">
-                    💻 CLI / Termux
-                </button>
+            </div>
+
+            <!-- Termux Panel -->
+            <div class="hub-panel active" id="panel-termux">
+                <div class="hub-grid">
+                    <div class="hub-main-card" style="border-color: rgba(16, 185, 129, 0.4);">
+                        <h3 class="hub-title" style="color: var(--emerald);">📱 TermuxHiveBear (Origen del Proyecto)</h3>
+                        <p class="hub-subtitle">La distribución nativa para Termux en Android. Convierte tu celular en un nodo servidor de la red P2P las 24/7 sin root.</p>
+                        <div class="code-box" style="border-color: rgba(16, 185, 129, 0.4);">
+                            <code>curl -sSL https://raw.githubusercontent.com/kuromi04/TermuxHiveBear/main/install.sh | bash</code>
+                            <button class="btn-copy" style="background: var(--emerald); color: #04060a;" onclick="copySnippet('curl -sSL https://raw.githubusercontent.com/kuromi04/TermuxHiveBear/main/install.sh | bash', this)">Copiar</button>
+                        </div>
+                        <div class="hub-dl-buttons" style="margin-top: 1.5rem; margin-bottom: 0;">
+                            <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="btn-download-primary" style="background: var(--emerald); color: #04060a;">
+                                🚀 Ir a TermuxHiveBear Repo ⭐
+                            </a>
+                        </div>
+                    </div>
+                    <div class="hub-side-card">
+                        <h4 class="hub-side-title">Especificaciones Termux</h4>
+                        <ul class="spec-list">
+                            <li><span class="check" style="color: var(--emerald);">✓</span> Versión: Termux Release v0.2.14</li>
+                            <li><span class="check" style="color: var(--emerald);">✓</span> Requisito: Termux en Android 7.0+</li>
+                            <li><span class="check" style="color: var(--emerald);">✓</span> Root: NO requerido</li>
+                            <li><span class="check" style="color: var(--emerald);">✓</span> Autor: @kuromi04</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
 
             <!-- Windows Panel -->
-            <div class="hub-panel active" id="panel-windows">
+            <div class="hub-panel" id="panel-windows">
                 <div class="hub-grid">
                     <div class="hub-main-card">
                         <h3 class="hub-title">🪟 HiveBear para Windows (x64)</h3>
@@ -1446,29 +1632,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- CLI Panel -->
-            <div class="hub-panel" id="panel-cli">
-                <div class="hub-grid">
-                    <div class="hub-main-card">
-                        <h3 class="hub-title">💻 Instalación vía Cargo / Termux</h3>
-                        <p class="hub-subtitle">Instala la CLI oficial de HiveBear en servidores sin interfaz gráfica o en Termux (Android).</p>
-                        <div class="code-box">
-                            <code>cargo install --git https://github.com/kuromi04/HiveBear hivebear-cli</code>
-                            <button class="btn-copy" onclick="copySnippet('cargo install --git https://github.com/kuromi04/HiveBear hivebear-cli', this)">Copiar</button>
-                        </div>
-                    </div>
-                    <div class="hub-side-card">
-                        <h4 class="hub-side-title">Nodo Termux Android</h4>
-                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                            Consulta nuestro script de auto-instalación para convertir tu Android en un nodo headless 24/7.
-                        </p>
-                        <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="btn-download-secondary" style="width: 100%; justify-content: center;">
-                            Ver TermuxHiveBear Repo →
-                        </a>
-                    </div>
-                </div>
-            </div>
         </section>
 
         <!-- Comparison Table Section -->
@@ -1484,7 +1647,7 @@
                     <thead>
                         <tr>
                             <th>Característica</th>
-                            <th class="comp-highlight">🐻 HiveBear P2P</th>
+                            <th class="comp-highlight">🐻 HiveBear P2P (Termux & Desktop)</th>
                             <th>APIs Centralizadas (OpenAI/Anthropic)</th>
                             <th>Local Tradicional (Ollama)</th>
                         </tr>
@@ -1509,8 +1672,8 @@
                             <td><span class="check-yes">✓ Gratuito</span></td>
                         </tr>
                         <tr>
-                            <td><strong>Soporte Móvil Nativo</strong></td>
-                            <td class="comp-highlight"><span class="check-yes">✓ Android APK + Termux</span></td>
+                            <td><strong>Soporte Móvil Nativo / Termux</strong></td>
+                            <td class="comp-highlight"><span class="check-yes">✓ Termux Android Repo Oficial + APK</span></td>
                             <td><span class="check-no">✗ Solo cliente Web/API</span></td>
                             <td><span class="check-no">✗ Complejo de instalar</span></td>
                         </tr>
@@ -1523,12 +1686,12 @@
         <section class="manifesto-card">
             <h3 class="manifesto-title">
                 <img src="assets/logo.png" alt="Logo" style="width: 36px; height: 36px; border-radius: 8px;">
-                La Guarida de HiveBear
+                La Guarida de HiveBear (Nacida en Termux)
             </h3>
             <p class="manifesto-text">
-                "HiveBear está construido por personas que creemos que la Inteligencia Artificial debe ser abierta, libre y accesible para todos. Comparte tu poder de cómputo libre, contribuye con código o únete a la conversación."
+                "HiveBear nació en Android gracias a Termux. Creemos firmemente que la Inteligencia Artificial debe ser abierta, libre y accesible para todos. Comparte tu poder de cómputo libre, contribuye con código o únete a la conversación en GitHub."
             </p>
-            <div class="manifesto-author">— @kuromi04 & la comunidad de HiveBear</div>
+            <div class="manifesto-author">— @kuromi04 & la comunidad de HiveBear / TermuxHiveBear</div>
         </section>
 
     </main>
@@ -1538,38 +1701,38 @@
         <div class="container">
             <div class="footer-grid">
                 <div class="footer-brand">
-                    <h4>🐻 HiveBear</h4>
-                    <p>Red P2P distribuida para cómputo e inferencia de Inteligencia Artificial abierta. Creado y diseñado por <a href="https://github.com/kuromi04" style="color: var(--cyan); text-decoration: none;">@kuromi04</a>.</p>
+                    <h4>🐻 HiveBear & TermuxHiveBear</h4>
+                    <p>Red P2P distribuida para cómputo e inferencia de Inteligencia Artificial abierta. Creado y mantenido por <a href="https://github.com/kuromi04" style="color: var(--cyan); text-decoration: none;">@kuromi04</a>.</p>
                 </div>
                 <div class="footer-col">
-                    <h5>Plataformas</h5>
+                    <h5>Termux & Plataformas</h5>
                     <ul>
+                        <li><a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" style="color: var(--emerald); font-weight: 700;">📱 TermuxHiveBear Repo ⭐</a></li>
                         <li><a href="#descargas" onclick="selectTab('windows')">Windows 10/11</a></li>
                         <li><a href="#descargas" onclick="selectTab('android')">Android APK</a></li>
                         <li><a href="#descargas" onclick="selectTab('mac')">macOS Universal</a></li>
-                        <li><a href="#descargas" onclick="selectTab('linux')">Linux AppImage / .deb</a></li>
                     </ul>
                 </div>
                 <div class="footer-col">
                     <h5>Recursos</h5>
                     <ul>
-                        <li><a href="how-it-works.html">Cómo Funciona</a></li>
-                        <li><a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener">Nodo Termux Android</a></li>
+                        <li><a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener">Termux Installer Script</a></li>
+                        <li><a href="how-it-works.html">Cómo Funciona P2P</a></li>
                         <li><a href="https://github.com/kuromi04/HiveBear/releases" target="_blank" rel="noopener">Lanzamientos & Tags</a></li>
                     </ul>
                 </div>
                 <div class="footer-col">
-                    <h5>Proyecto</h5>
+                    <h5>Proyectos @kuromi04</h5>
                     <ul>
-                        <li><a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener">GitHub Oficial</a></li>
-                        <li><a href="https://github.com/kuromi04/HiveBear/issues" target="_blank" rel="noopener">Reportar Error</a></li>
+                        <li><a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener">TermuxHiveBear (GitHub)</a></li>
+                        <li><a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener">HiveBear Desktop/Mobile Repo</a></li>
                         <li><a href="https://github.com/kuromi04/HiveBear/blob/main/LICENSE" target="_blank" rel="noopener">Licencia MIT</a></li>
                     </ul>
                 </div>
             </div>
 
             <div class="footer-bottom">
-                <div>© 2026 HiveBear Project • Licencia Código Abierto MIT.</div>
+                <div>© 2026 HiveBear Project • Nido Oficial TermuxHiveBear.</div>
                 <div>Hecho con <span>♥</span> y Rust por <strong>@kuromi04</strong></div>
             </div>
         </div>
@@ -1581,14 +1744,14 @@
         (function() {
             try {
                 const ua = navigator.userAgent || '';
-                let detectedOS = 'windows';
+                let detectedOS = 'termux';
                 let downloadUrl = 'https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64-setup.exe';
                 let btnText = 'Descargar para Windows (v0.2.14)';
 
                 if (/android/i.test(ua)) {
-                    detectedOS = 'android';
-                    downloadUrl = 'https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.apk';
-                    btnText = 'Descargar HiveBear.apk (Android)';
+                    detectedOS = 'termux';
+                    downloadUrl = 'https://github.com/kuromi04/TermuxHiveBear';
+                    btnText = 'Ir a TermuxHiveBear Repo ⭐';
                 } else if (/macintosh|mac os x/i.test(ua)) {
                     detectedOS = 'mac';
                     downloadUrl = 'https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.dmg';
@@ -1607,15 +1770,11 @@
                     heroText.textContent = btnText;
                 }
 
-                // Update Nav Button Text
-                const navText = document.getElementById('nav-smart-text');
-                if (navText) navText.textContent = 'Descargar';
-
                 // Show badge for detected OS
                 const badge = document.getElementById('badge-os-' + detectedOS);
                 if (badge) badge.classList.add('visible');
 
-                selectTab(detectedOS);
+                selectTab('termux');
             } catch (e) {
                 console.debug(e);
             }
@@ -1623,7 +1782,7 @@
 
         // Tab Switcher
         function selectTab(tabId) {
-            const tabs = ['windows', 'android', 'mac', 'linux', 'cli'];
+            const tabs = ['termux', 'windows', 'android', 'mac', 'linux'];
             if (!tabs.includes(tabId)) return;
 
             tabs.forEach(t => {
@@ -1659,7 +1818,7 @@
             navigator.clipboard.writeText(text).then(() => {
                 const orig = el.textContent;
                 el.textContent = '¡Copiado!';
-                el.style.background = 'var(--cyan)';
+                el.style.background = 'var(--emerald)';
                 el.style.color = '#04060a';
                 setTimeout(() => {
                     el.textContent = orig;
