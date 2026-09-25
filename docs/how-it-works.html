@@ -3,283 +3,699 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cómo Funciona HiveBear - Guía Visual P2P</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <title>Cómo Funciona HiveBear - Arquitectura P2P de IA por @kuromi04</title>
+    <meta name="description" content="Descubre cómo funciona la red P2P distribuida de HiveBear: inferencia de modelos GGUF, motor Candle en Rust, cifrado QUIC TLS 1.3 y sistema de Karma.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Mermaid.js for Diagrams -->
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                darkMode: true,
+                background: '#090c14',
+                primaryColor: '#00f5d4',
+                primaryTextColor: '#ffffff',
+                primaryBorderColor: '#00f5d4',
+                lineColor: '#00f5d4',
+                secondaryColor: '#f72585',
+                tertiaryColor: '#131726'
+            }
+        });
     </script>
+    
     <style>
         :root {
-            --bg-color: #0a0a0f;
-            --text-color: #e0e0e0;
-            --cyan: #00ffff;
-            --magenta: #ff00ff;
-            --dark-panel: #111116;
-            --card-bg: #15151e;
-            --border: #222;
+            /* Vercel / Stripe Inspired Obsidian & Glass Palette */
+            --bg-base: #080a10;
+            --bg-surface: #0d101a;
+            --bg-surface-elevated: #131726;
+            --bg-card: rgba(15, 20, 32, 0.65);
+            --bg-card-hover: rgba(22, 29, 46, 0.85);
+            
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(0, 245, 212, 0.35);
+            --border-glow: rgba(0, 245, 212, 0.5);
+            
+            --text-main: #f3f5f9;
+            --text-secondary: #94a0b8;
+            --text-muted: #64748b;
+            
+            --cyan: #00f5d4;
+            --cyan-glow: rgba(0, 245, 212, 0.25);
+            --cyan-dark: #00bfa5;
+            
+            --emerald: #10b981;
+            --emerald-glow: rgba(16, 185, 129, 0.25);
+            
+            --magenta: #f72585;
+            --magenta-glow: rgba(247, 37, 133, 0.25);
+            
+            --purple: #7209b7;
+            --blue: #3b82f6;
+            
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 24px;
+            --radius-full: 9999px;
+            
+            --shadow-glass: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            --shadow-glow: 0 0 35px -5px rgba(0, 245, 212, 0.2);
+            
+            --transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
         }
 
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            padding: 0;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             line-height: 1.7;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.2rem 2rem;
-            background: rgba(10, 10, 15, 0.9);
-            border-bottom: 1px solid var(--border);
-            position: sticky;
+        /* Ambient Background */
+        .ambient-background {
+            position: fixed;
             top: 0;
-            backdrop-filter: blur(10px);
-            z-index: 100;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(0, 245, 212, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(247, 37, 133, 0.05) 0%, transparent 45%),
+                radial-gradient(circle at 15% 70%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
+                linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px;
         }
-
-        .nav-brand {
-            font-weight: 800;
-            font-size: 1.3rem;
-            color: #fff;
-            text-decoration: none;
-            letter-spacing: 1px;
-        }
-
-        .nav-brand span { color: var(--cyan); }
-
-        .nav-links a {
-            color: #aaa;
-            text-decoration: none;
-            margin-left: 1.5rem;
-            font-weight: 500;
-            transition: color 0.2s;
-        }
-
-        .nav-links a:hover { color: var(--cyan); }
 
         .container {
-            max-width: 900px;
+            width: 100%;
+            max-width: 1000px;
             margin: 0 auto;
-            padding: 3rem 1.5rem;
+            padding: 0 1.5rem;
+            position: relative;
+            z-index: 1;
         }
 
-        .header-title {
-            text-align: center;
-            margin-bottom: 3rem;
-        }
-
-        .header-title h1 {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
-            background: -webkit-linear-gradient(45deg, var(--cyan), var(--magenta));
+        /* Typography */
+        .gradient-title {
+            background: linear-gradient(135deg, #ffffff 30%, var(--cyan) 90%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .header-title p {
-            color: #888;
-            font-size: 1.1rem;
-        }
-
-        .badge-author {
+        /* Pulse Dot */
+        .live-pulse {
             display: inline-block;
-            background: rgba(0, 255, 255, 0.1);
-            color: var(--cyan);
-            padding: 0.3rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-family: 'JetBrains Mono', monospace;
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            margin-top: 0.5rem;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--emerald);
+            box-shadow: 0 0 10px var(--emerald);
+            animation: pulse-ring 2s infinite;
         }
 
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* Navbar */
+        .navbar {
+            position: sticky;
+            top: 0;
+            width: 100%;
+            background: rgba(8, 10, 16, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-subtle);
+            z-index: 100;
+            transition: var(--transition);
+        }
+
+        .nav-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 76px;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            text-decoration: none;
+            color: #fff;
+        }
+
+        .nav-brand-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, rgba(0, 245, 212, 0.2), rgba(59, 130, 246, 0.2));
+            border: 1px solid rgba(0, 245, 212, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            box-shadow: 0 0 20px var(--cyan-glow);
+        }
+
+        .nav-brand-title {
+            font-weight: 800;
+            font-size: 1.3rem;
+            letter-spacing: -0.5px;
+            color: #fff;
+        }
+
+        .nav-badges {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .author-pill {
+            font-size: 0.72rem;
+            font-weight: 700;
+            background: rgba(247, 37, 133, 0.12);
+            color: var(--magenta);
+            border: 1px solid rgba(247, 37, 133, 0.3);
+            padding: 0.2rem 0.6rem;
+            border-radius: var(--radius-full);
+            font-family: 'JetBrains Mono', monospace;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .author-pill:hover {
+            background: rgba(247, 37, 133, 0.25);
+            box-shadow: 0 0 12px var(--magenta-glow);
+        }
+
+        .version-pill {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--cyan);
+            background: rgba(0, 245, 212, 0.1);
+            border: 1px solid rgba(0, 245, 212, 0.3);
+            padding: 0.2rem 0.55rem;
+            border-radius: var(--radius-full);
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .nav-links a:hover {
+            color: #fff;
+        }
+
+        .btn-nav {
+            background: var(--cyan);
+            color: #05070c;
+            font-weight: 700;
+            font-size: 0.9rem;
+            padding: 0.6rem 1.25rem;
+            border-radius: var(--radius-full);
+            text-decoration: none;
+            transition: var(--transition);
+            box-shadow: 0 0 20px var(--cyan-glow);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-nav:hover {
+            transform: translateY(-2px);
+            background: #26ffdd;
+            box-shadow: 0 0 30px rgba(0, 245, 212, 0.4);
+        }
+
+        /* Page Header */
+        .page-header {
+            text-align: center;
+            padding: 5rem 0 3.5rem;
+        }
+
+        .page-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .page-title {
+            font-size: clamp(2.2rem, 4vw, 3.5rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.15;
+            margin-bottom: 1.25rem;
+        }
+
+        .page-subtitle {
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+
+        /* Glass Cards */
         .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 2rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem;
             margin-bottom: 2.5rem;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-            transition: border-color 0.3s;
+            backdrop-filter: blur(16px);
+            box-shadow: var(--shadow-glass);
+            transition: var(--transition);
         }
 
         .card:hover {
-            border-color: rgba(0, 255, 255, 0.3);
+            border-color: var(--border-hover);
+            transform: translateY(-4px);
+            box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.6), 0 0 25px var(--cyan-glow);
         }
 
-        h2 {
-            font-size: 1.6rem;
-            color: #fff;
-            margin-top: 0;
+        .card-header {
             display: flex;
             align-items: center;
-            gap: 0.6rem;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 0.8rem;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 1rem;
         }
 
-        .tip-box {
-            background: rgba(0, 255, 255, 0.05);
+        .card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: var(--radius-md);
+            background: rgba(0, 245, 212, 0.12);
+            border: 1px solid rgba(0, 245, 212, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            color: var(--cyan);
+        }
+
+        .card-icon-magenta {
+            background: rgba(247, 37, 133, 0.12);
+            border-color: rgba(247, 37, 133, 0.3);
+            color: var(--magenta);
+        }
+
+        .card-icon-emerald {
+            background: rgba(16, 185, 129, 0.12);
+            border-color: rgba(16, 185, 129, 0.3);
+            color: var(--emerald);
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .highlight-box {
+            background: rgba(0, 245, 212, 0.05);
             border-left: 4px solid var(--cyan);
-            padding: 1.2rem;
-            border-radius: 0 8px 8px 0;
+            padding: 1.25rem 1.5rem;
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
             margin: 1.5rem 0;
-            font-size: 0.95rem;
+            font-size: 0.98rem;
+            color: var(--text-main);
         }
 
-        .tip-box strong { color: var(--cyan); }
+        .highlight-box strong {
+            color: var(--cyan);
+        }
 
         .diagram-container {
-            background: #0d0d12;
-            padding: 1.5rem;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            margin: 1.5rem 0;
+            background: #090c14;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 2rem 1.5rem;
+            margin: 2rem 0;
             overflow-x: auto;
+            text-align: center;
         }
 
-        ul {
-            padding-left: 1.2rem;
+        ul.feature-list {
+            list-style: none;
+            margin-top: 1rem;
         }
 
-        li {
-            margin-bottom: 0.6rem;
+        ul.feature-list li {
+            position: relative;
+            padding-left: 1.75rem;
+            margin-bottom: 0.85rem;
+            color: var(--text-secondary);
+            font-size: 0.98rem;
         }
 
-        li strong {
-            color: #fff;
+        ul.feature-list li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: var(--cyan);
+            font-weight: 800;
+        }
+
+        /* Back Button Wrapper */
+        .action-footer {
+            text-align: center;
+            margin: 4rem 0 6rem;
         }
 
         .btn-back {
-            display: inline-block;
-            background: transparent;
-            color: var(--cyan);
-            border: 1px solid var(--cyan);
-            padding: 0.8rem 1.6rem;
-            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.65rem;
+            background: linear-gradient(135deg, var(--cyan), var(--cyan-dark));
+            color: #04060a;
+            font-weight: 800;
+            font-size: 1rem;
+            padding: 0.9rem 2rem;
+            border-radius: var(--radius-full);
             text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s;
-            margin-top: 2rem;
+            transition: var(--transition);
+            box-shadow: 0 0 30px var(--cyan-glow);
         }
 
         .btn-back:hover {
-            background: var(--cyan);
-            color: #000;
+            transform: translateY(-3px);
+            box-shadow: 0 0 45px rgba(0, 245, 212, 0.45);
         }
 
-        footer {
-            text-align: center;
-            padding: 3rem 1rem;
-            border-top: 1px solid var(--border);
-            color: #666;
+        /* Footer */
+        .footer {
+            background: #05070d;
+            border-top: 1px solid var(--border-subtle);
+            padding: 4rem 0 2rem;
+            color: var(--text-secondary);
             font-size: 0.9rem;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr repeat(3, 1fr);
+            gap: 3rem;
+            margin-bottom: 3.5rem;
+        }
+
+        .footer-brand h4 {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 0.75rem;
+        }
+
+        .footer-brand p {
+            line-height: 1.6;
+            color: var(--text-muted);
+            max-width: 320px;
+        }
+
+        .footer-col h5 {
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+        }
+
+        .footer-col ul {
+            list-style: none;
+        }
+
+        .footer-col ul li {
+            margin-bottom: 0.65rem;
+        }
+
+        .footer-col ul a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .footer-col ul a:hover {
+            color: var(--cyan);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .footer-bottom span {
+            color: var(--magenta);
+        }
+
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .footer-grid { grid-template-columns: 1fr; }
+            .footer-bottom { flex-direction: column; gap: 1rem; text-align: center; }
+            .card { padding: 1.75rem; }
         }
     </style>
 </head>
 <body>
 
-    <nav class="navbar">
-        <a href="index.html" class="nav-brand">HiveBear <span>by @kuromi04</span></a>
-        <div class="nav-links">
-            <a href="index.html">Inicio</a>
-            <a href="index.html#downloads" style="color: var(--cyan); font-weight: 600;">Descargas</a>
-            <a href="https://github.com/kuromi04/HiveBear">GitHub</a>
-            <a href="https://github.com/kuromi04/TermuxHiveBear">Termux</a>
+    <!-- Ambient Grid & Glow Background -->
+    <div class="ambient-background"></div>
+
+    <!-- Header Navigation -->
+    <header class="navbar">
+        <div class="container nav-inner">
+            <a href="index.html" class="nav-brand">
+                <div class="nav-brand-icon">🐻</div>
+                <div>
+                    <span class="nav-brand-title">HiveBear</span>
+                    <div class="nav-badges">
+                        <a href="https://github.com/kuromi04" target="_blank" rel="noopener" class="author-pill">by @kuromi04</a>
+                        <span class="version-pill"><span class="live-pulse"></span> v0.2.14</span>
+                    </div>
+                </div>
+            </a>
+
+            <nav class="nav-links">
+                <a href="index.html">Inicio</a>
+                <a href="index.html#caracteristicas">Características</a>
+                <a href="index.html#descargas">Descargas</a>
+                <a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener">GitHub</a>
+            </nav>
+
+            <div class="nav-cta">
+                <a href="index.html#descargas" class="btn-nav">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span>Obtener App</span>
+                </a>
+            </div>
         </div>
-    </nav>
+    </header>
 
-    <div class="container">
+    <!-- Main Content -->
+    <main class="container">
 
-        <div class="header-title">
-            <h1>Cómo Funciona la Magia P2P</h1>
-            <p>Guía interactiva y visual para entender la red distribuida de Inteligencia Artificial.</p>
-            <div class="badge-author">Parcheado, Mejorado y Mantenido por @kuromi04</div>
+        <div class="page-header">
+            <span class="page-tag">Documentación de Arquitectura</span>
+            <h1 class="page-title">
+                Cómo Funciona la <span class="gradient-title">Red P2P de HiveBear</span>
+            </h1>
+            <p class="page-subtitle">
+                Una guía visual detallada sobre cómo conectamos dispositivos, dividimos modelos GGUF pesados y garantizamos privacidad total mediante Rust y QUIC.
+            </p>
         </div>
 
-        <!-- SECCIÓN 1 -->
+        <!-- Section 1 -->
         <div class="card">
-            <h2>🧩 1. ¿Qué es una red P2P de Inteligencia Artificial?</h2>
-            <p>Imagina que un modelo de IA moderno (como Llama 3) es un <strong>rompecabezas gigante de 70,000 piezas</strong>. Si intentas armarlo tú solo en tu teléfono celular, el teléfono se quedará sin memoria, se calentará y la batería morirá en minutos.</p>
+            <div class="card-header">
+                <div class="card-icon">🧩</div>
+                <h2 class="card-title">1. El Concepto P2P de Inteligencia Artificial</h2>
+            </div>
+            <p>
+                Los modelos modernos de Inteligencia Artificial (como Qwen 2.5, Llama 3.2 o DeepSeek) son <strong>estructuras de tensores gigantescas con miles de millones de parámetros</strong>. Ejecutarlos individualmente en un teléfono inteligente o en una laptop básica suele consumir toda la memoria RAM y agotar la batería en minutos.
+            </p>
             
-            <div class="tip-box">
-                <strong>La Solución P2P (Peer-to-Peer):</strong> En lugar de depender de una supercomputadora central corporativa (como ChatGPT), HiveBear conecta tu teléfono con las computadoras de otros miembros de la manada. Cada máquina procesa una porción del rompecabezas en milisegundos y le envía la respuesta lista a tu pantalla.
+            <div class="highlight-box">
+                <strong>La Solución Distribuida:</strong> En lugar de enviar tus datos a un servidor central cerrado de una gran corporación, HiveBear fragmenta o distribuye las cargas de cálculo entre pares de la red P2P. Cada nodo procesa matrices matemáticas en milisegundos y devuelve la inferencia cifrada directamente a tu pantalla.
             </div>
         </div>
 
-        <!-- SECCIÓN 2 -->
+        <!-- Section 2 -->
         <div class="card">
-            <h2>📱 2. El Ecosistema Termux + PC</h2>
-            <p>Esta edición creada por <strong>@kuromi04</strong> une dos mundos que antes estaban separados:</p>
+            <div class="card-header">
+                <div class="card-icon card-icon-magenta">🌐</div>
+                <h2 class="card-title">2. Flujo de Datos & Diagrama de Red P2P</h2>
+            </div>
+            <p>
+                La arquitectura desarrollada por <strong>@kuromi04</strong> conecta clientes ligeros (smartphones o laptops) con nodos potentes (PCs con GPU o servidores) a través de túneles directos:
+            </p>
 
             <div class="diagram-container">
                 <pre class="mermaid">
 graph TD
-    A[📱 Celular Android <br> TermuxHiveBear] <-->|Petición Ligera| B((☁️ Coordinador Cloud <br> Servidor de kuromi04))
-    C[💻 PC Gamer / Torre <br> Windows / Linux] <-->|Dona su GPU| B
-    D[🍏 Mac Silicon <br> macOS M1/M2/M3] <-->|Dona su CPU| B
-    
-    A -.->|🌐 Conexión P2P Directa Encriptada| C
-    A -.->|🌐 Conexión P2P Directa Encriptada| D
+    subgraph Red P2P Descentralizada HiveBear
+        A[📱 Android APK / Termux <br> Cliente Móvil Lote Lero] <-->|Señal STUN/TURN| B((☁️ Coordinador P2P <br> Descubrimiento & Signaling))
+        C[💻 PC Windows / Linux <br> GPU NVIDIA / AMD / Candle Engine] <-->|Anuncia Capacidad GPU| B
+        D[🍏 macOS Apple Silicon <br> GPU Metal / M1-M4 CPU] <-->|Anuncia Capacidad CPU| B
+        
+        A == "🌐 Túnel Directo Cifrado QUIC TLS 1.3" ==> C
+        A == "🌐 Túnel Directo Cifrado QUIC TLS 1.3" ==> D
+    end
                 </pre>
             </div>
 
-            <ul>
-                <li><strong>Tu Computadora (Windows / Linux / Mac):</strong> Funciona como el "músculo". Descarga los gigabytes pesados de la IA y los corre sobre su procesador o tarjeta gráfica (GPU).</li>
-                <li><strong>Tu Teléfono (Android con Termux):</strong> Funciona como el cliente móvil ágil. Te permite chatear y pedir respuestas complejas sin sobrecalentar el smartphone.</li>
+            <ul class="feature-list">
+                <li><strong>Nodos de Cómputo (PC / Mac / Servidores):</strong> Descargan los modelos GGUF pesados y procesan capas de tensores sobre GPU o CPU acelerada con Rust.</li>
+                <li><strong>Clientes Ligeros (Android / Portátiles):</strong> Permiten chatear, enviar prompts o recibir respuestas en tiempo real sin sobrecalentar el procesador local.</li>
+                <li><strong>Coordinador de Descubrimiento (Signaling):</strong> Ayuda a los nodos a localizarse en milisegundos sin almacenar jamás el contenido de las conversaciones.</li>
             </ul>
         </div>
 
-        <!-- SECCIÓN 3 -->
+        <!-- Section 3 -->
         <div class="card">
-            <h2>⚖️ 3. El Sistema de Karma y Prioridad VIP</h2>
-            <p>HiveBear no cobra dinero ni te llena la pantalla de anuncios. Funciona con un modelo de <strong>Confianza y Reciprocidad</strong>:</p>
-
-            <ul>
-                <li><strong>Puntos de Karma:</strong> Cada vez que tu PC o dispositivo procesa tokens para otro usuario, sumas puntos de Karma automáticamente a tu cuenta.</li>
-                <li><strong>Anti-Trampas (Proof-of-Work Criptográfico):</strong> El receptor firma un recibo digital único. No puedes hackear el cliente para inventar puntos; el coordinador verifica cada recibo contra ataques de repetición.</li>
-                <li><strong>Cola de Prioridad VIP_ALPHA:</strong> Al acumular más de 500 puntos de Karma, desbloqueas el nivel <em>VIP_ALPHA</em>. Cuando tú hagas una consulta pesada desde la calle, tu petición salta al primer lugar de la fila.</li>
+            <div class="card-header">
+                <div class="card-icon card-icon-emerald">⚙️</div>
+                <h2 class="card-title">3. Motor Candle en Pure Rust</h2>
+            </div>
+            <p>
+                En la versión <strong>v0.2.14</strong>, HiveBear integra el motor de inferencia nativo <strong>Candle</strong> de HuggingFace en Rust.
+            </p>
+            <ul class="feature-list">
+                <li><strong>Cero dependencias C++ / NDK:</strong> Evita problemas de compilación en móviles ARM y garantiza una ejecucion ligera y limpia.</li>
+                <li><strong>Soporte GGUF Directo:</strong> Carga archivos de cuantización `.gguf` (Q4_K_M, Q8, etc.) directamente desde disco sin requerir herramientas externas como Ollama.</li>
+                <li><strong>Consumo Reducido:</strong> Menos de 45 MB de RAM en modo demonio (headless).</li>
             </ul>
         </div>
 
-        <!-- SECCIÓN 4 -->
+        <!-- Section 4 -->
         <div class="card">
-            <h2>🛡️ 4. Seguridad y Privacidad: ¿Me pueden hackear?</h2>
-            <p><strong>¡Rotundamente NO!</strong> La seguridad fue la prioridad número uno al rediseñar la arquitectura:</p>
-
-            <ul>
-                <li><strong>Cifrado Militar de Extremo a Extremo (QUIC / TLS 1.3):</strong> Toda la información viaja blindada. Ni tu proveedor de internet ni personas en tu red local pueden leer tus prompts.</li>
-                <li><strong>Aislamiento Matemático (Sandboxing):</strong> Los nodos solo intercambian matrices matemáticas (tensores numéricos). Es técnicamente imposible que alguien acceda a tus fotos, archivos o ejecute código malicioso en tu sistema.</li>
-                <li><strong>Defensa Anti-DoS en la Nube:</strong> El coordinador implementa colas acotadas (máximo 50 señales) y purga activa de conexiones fantasma para impedir ataques de saturación.</li>
+            <div class="card-header">
+                <div class="card-icon card-icon-magenta">💎</div>
+                <h2 class="card-title">4. Sistema de Karma Criptográfico</h2>
+            </div>
+            <p>
+                HiveBear opera bajo una economía descentralizada y transparente basada en el principio de reciprocidad:
+            </p>
+            <ul class="feature-list">
+                <li><strong>Acumulación de Créditos:</strong> Al compartir GPU o CPU libre para atender peticiones de otros pares, ganas puntos de Karma de forma automática.</li>
+                <li><strong>Anti-Trampas Proof-of-Work:</strong> Cada cálculo completado genera un recibo firmado criptográficamente que previene la falsificación de créditos.</li>
+                <li><strong>Prioridad de Red VIP:</strong> Los usuarios con mayor Karma obtienen prioridad absoluta en la cola de inferencia distribuida durante momentos de alta demanda.</li>
             </ul>
         </div>
 
-        <!-- SECCIÓN 5 -->
+        <!-- Section 5 -->
         <div class="card">
-            <h2>📡 5. Protocolos: ¿Cómo se conectan los dispositivos?</h2>
-            <p>No necesitas abrir puertos en tu router ni saber de redes avanzadas:</p>
-
-            <ul>
-                <li><strong>mDNS:</strong> Si estás conectado al mismo WiFi que tu PC, se encuentran al instante como si fuera Bluetooth.</li>
-                <li><strong>STUN & Hole Punching:</strong> Si estás en otra ciudad o con datos móviles (4G/5G), nuestro Servidor Coordinador ayuda a que ambos routers abran un túnel seguro directo entre ellos.</li>
-                <li><strong>QUIC Protocol:</strong> Diseñado para conexiones rápidas y con tolerancia a caídas. Si entras a un ascensor o cambia tu red, se reconecta automáticamente sin perder el chat.</li>
+            <div class="card-header">
+                <div class="card-icon">🛡️</div>
+                <h2 class="card-title">5. Cifrado & Conexión QUIC TLS 1.3</h2>
+            </div>
+            <p>
+                La privacidad y seguridad de los datos están garantizadas en cada capa de transporte:
+            </p>
+            <ul class="feature-list">
+                <li><strong>Cifrado Militar E2EE:</strong> Los datos se transmiten usando el protocolo QUIC con cifrado TLS 1.3. Ni proveedores de internet ni nodos intermedios pueden inspeccionar tus mensajes.</li>
+                <li><strong>Bypass NAT Automático:</strong> Agujereado de puertos STUN/TURN (Hole-Punching) para conectar dispositivos detrás de routers domésticos o redes 4G/5G sin configurar aperturas de puertos.</li>
+                <li><strong>Aislamiento de Memoria (Sandboxing):</strong> Los nodos colaboradores solo reciben matrices de tensores numéricos; es técnicamente imposible ejecutar archivos o scripts maliciosos.</li>
             </ul>
         </div>
 
-        <div style="text-align: center;">
-            <a href="index.html" class="btn-back">⬅️ Volver a la Página Principal</a>
+        <!-- Action Footer -->
+        <div class="action-footer">
+            <a href="index.html" class="btn-back">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                Volver a la Página Principal
+            </a>
         </div>
 
-    </div>
+    </main>
 
-    <footer>
-        <p>HiveBear P2P Mesh Engine - Diseñado y Mantenido por <a href="https://github.com/kuromi04" style="color: var(--cyan); text-decoration: none;">@kuromi04</a></p>
-        <p>Licencia MIT - Código Abierto para Todos</p>
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <h4>🐻 HiveBear</h4>
+                    <p>Red P2P distribuida para cómputo e inferencia de Inteligencia Artificial abierta. Creado y diseñado por <a href="https://github.com/kuromi04" style="color: var(--cyan); text-decoration: none;">@kuromi04</a>.</p>
+                </div>
+                <div class="footer-col">
+                    <h5>Plataformas</h5>
+                    <ul>
+                        <li><a href="index.html#descargas">Windows 10/11</a></li>
+                        <li><a href="index.html#descargas">Android APK</a></li>
+                        <li><a href="index.html#descargas">macOS Universal</a></li>
+                        <li><a href="index.html#descargas">Linux AppImage / .deb</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h5>Recursos</h5>
+                    <ul>
+                        <li><a href="how-it-works.html">Cómo Funciona</a></li>
+                        <li><a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener">Nodo Termux Android</a></li>
+                        <li><a href="https://github.com/kuromi04/HiveBear/releases" target="_blank" rel="noopener">Lanzamientos & Tags</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h5>Proyecto</h5>
+                    <ul>
+                        <li><a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener">GitHub Oficial</a></li>
+                        <li><a href="https://github.com/kuromi04/HiveBear/issues" target="_blank" rel="noopener">Reportar Error</a></li>
+                        <li><a href="https://github.com/kuromi04/HiveBear/blob/main/LICENSE" target="_blank" rel="noopener">Licencia MIT</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <div>© 2026 HiveBear Project • Licencia Código Abierto MIT.</div>
+                <div>Hecho con <span>♥</span> y Rust por <strong>@kuromi04</strong></div>
+            </div>
+        </div>
     </footer>
 
 </body>
