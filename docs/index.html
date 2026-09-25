@@ -71,7 +71,7 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        /* Subtle Ambient Grid Background */
+        /* Ambient Background */
         .ambient-background {
             position: fixed;
             top: 0;
@@ -98,20 +98,12 @@
             z-index: 1;
         }
 
-        /* Typography Helpers */
         .gradient-title {
             background: linear-gradient(135deg, #ffffff 30%, var(--cyan) 90%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .gradient-accent {
-            background: linear-gradient(135deg, var(--cyan) 0%, var(--emerald) 50%, var(--blue) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        /* Pulse Dot */
         .live-pulse {
             display: inline-block;
             width: 8px;
@@ -128,12 +120,12 @@
             100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
 
-        /* Header Navigation */
+        /* Navbar Layout - Clean & Non-Overlapping */
         .navbar {
             position: sticky;
             top: 0;
             width: 100%;
-            background: rgba(8, 10, 16, 0.75);
+            background: rgba(8, 10, 16, 0.85);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--border-subtle);
@@ -146,19 +138,21 @@
             align-items: center;
             justify-content: space-between;
             height: 76px;
+            gap: 1rem;
         }
 
         .nav-brand {
             display: flex;
             align-items: center;
-            gap: 0.85rem;
+            gap: 0.75rem;
             text-decoration: none;
             color: #fff;
+            flex-shrink: 0;
         }
 
         .nav-brand-logo-img {
-            width: 42px;
-            height: 42px;
+            width: 40px;
+            height: 40px;
             border-radius: var(--radius-sm);
             border: 1px solid rgba(0, 245, 212, 0.4);
             box-shadow: 0 0 15px var(--cyan-glow);
@@ -167,7 +161,7 @@
 
         .nav-brand-title {
             font-weight: 800;
-            font-size: 1.3rem;
+            font-size: 1.25rem;
             letter-spacing: -0.5px;
             color: #fff;
         }
@@ -175,16 +169,16 @@
         .nav-badges {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
         }
 
         .author-pill {
-            font-size: 0.72rem;
+            font-size: 0.7rem;
             font-weight: 700;
             background: rgba(247, 37, 133, 0.12);
             color: var(--magenta);
             border: 1px solid rgba(247, 37, 133, 0.3);
-            padding: 0.2rem 0.6rem;
+            padding: 0.15rem 0.5rem;
             border-radius: var(--radius-full);
             font-family: 'JetBrains Mono', monospace;
             text-decoration: none;
@@ -197,30 +191,33 @@
         }
 
         .version-pill {
-            font-size: 0.72rem;
+            font-size: 0.7rem;
             font-weight: 600;
             color: var(--cyan);
             background: rgba(0, 245, 212, 0.1);
             border: 1px solid rgba(0, 245, 212, 0.3);
-            padding: 0.2rem 0.55rem;
+            padding: 0.15rem 0.45rem;
             border-radius: var(--radius-full);
             font-family: 'JetBrains Mono', monospace;
             display: flex;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.35rem;
         }
 
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 1.75rem;
+            gap: 1.25rem;
+            flex-shrink: 1;
+            min-width: 0;
         }
 
         .nav-links a {
             color: var(--text-secondary);
             text-decoration: none;
-            font-size: 0.92rem;
+            font-size: 0.88rem;
             font-weight: 500;
+            white-space: nowrap;
             transition: var(--transition);
         }
 
@@ -228,33 +225,53 @@
             color: #fff;
         }
 
-        .nav-termux-link {
+        .nav-termux-btn {
             color: var(--emerald) !important;
             font-weight: 700 !important;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 0.35rem;
+            gap: 0.4rem;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            padding: 0.3rem 0.75rem;
+            border-radius: var(--radius-full);
+            transition: var(--transition);
+        }
+
+        .nav-termux-btn:hover {
+            background: rgba(16, 185, 129, 0.25);
+            border-color: var(--emerald);
+            box-shadow: 0 0 15px var(--emerald-glow);
+            color: #fff !important;
+        }
+
+        .termux-nav-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            object-fit: contain;
         }
 
         .nav-cta {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            flex-shrink: 0;
         }
 
         .btn-nav {
             background: var(--cyan);
             color: #05070c;
             font-weight: 700;
-            font-size: 0.9rem;
-            padding: 0.6rem 1.25rem;
+            font-size: 0.88rem;
+            padding: 0.55rem 1.15rem;
             border-radius: var(--radius-full);
             text-decoration: none;
             transition: var(--transition);
             box-shadow: 0 0 20px var(--cyan-glow);
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.45rem;
+            white-space: nowrap;
         }
 
         .btn-nav:hover {
@@ -356,7 +373,7 @@
             backdrop-filter: blur(10px);
             display: inline-flex;
             align-items: center;
-            gap: 0.6rem;
+            gap: 0.65rem;
         }
 
         .btn-hero-termux:hover {
@@ -430,13 +447,13 @@
 
         /* Termux Origin Showcase Hero Banner */
         .termux-origin-card {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(13, 16, 26, 0.95));
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(13, 16, 26, 0.95));
             border: 2px solid rgba(16, 185, 129, 0.4);
             border-radius: var(--radius-lg);
             padding: 3rem 2.5rem;
             margin: 4rem 0;
             backdrop-filter: blur(20px);
-            box-shadow: 0 0 40px rgba(16, 185, 129, 0.15);
+            box-shadow: 0 0 45px rgba(16, 185, 129, 0.18);
             position: relative;
             overflow: hidden;
         }
@@ -471,6 +488,9 @@
             color: #fff;
             margin-bottom: 1rem;
             line-height: 1.25;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
         .termux-desc {
@@ -498,7 +518,7 @@
             box-shadow: 0 0 25px var(--emerald-glow);
             display: inline-flex;
             align-items: center;
-            gap: 0.6rem;
+            gap: 0.65rem;
         }
 
         .btn-termux-repo:hover {
@@ -509,7 +529,7 @@
 
         .termux-code-widget {
             background: #06080f;
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            border: 1px solid rgba(16, 185, 129, 0.35);
             border-radius: var(--radius-md);
             padding: 1.5rem;
             font-family: 'JetBrains Mono', monospace;
@@ -518,9 +538,9 @@
         .termux-widget-header {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 0.5rem;
             color: var(--emerald);
-            font-size: 0.82rem;
+            font-size: 0.85rem;
             font-weight: 700;
             margin-bottom: 1rem;
             border-bottom: 1px solid var(--border-subtle);
@@ -1194,14 +1214,14 @@
         }
 
         /* Responsive Layout Adjustments */
-        @media (max-width: 992px) {
+        @media (max-width: 1024px) {
+            .nav-links { display: none; }
             .bento-grid { grid-template-columns: 1fr; }
             .bento-card-2x { grid-column: span 1; }
             .hub-grid { grid-template-columns: 1fr; }
             .termux-grid { grid-template-columns: 1fr; }
             .app-previews-grid { grid-template-columns: 1fr; }
             .footer-grid { grid-template-columns: 1fr 1fr; }
-            .nav-links { display: none; }
         }
 
         @media (max-width: 640px) {
@@ -1232,21 +1252,19 @@
             </a>
 
             <nav class="nav-links">
-                <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="nav-termux-link">
-                    📱 Termux Engine (Origen)
+                <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="nav-termux-btn">
+                    <img src="assets/termux-logo.png" alt="Termux Logo" class="termux-nav-icon">
+                    <span>TermuxHiveBear</span>
                 </a>
-                <a href="#termux-origin">Termux</a>
                 <a href="#caracteristicas">Características</a>
-                <a href="#capturas">Interfaz</a>
                 <a href="#descargas">Descargas</a>
                 <a href="how-it-works.html">Cómo Funciona</a>
-                <a href="https://github.com/kuromi04/HiveBear" target="_blank" rel="noopener">GitHub</a>
             </nav>
 
             <div class="nav-cta">
                 <a href="#descargas" class="btn-nav" id="nav-smart-btn">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    <span id="nav-smart-text">Descargar</span>
+                    <span id="nav-smart-text">Descargar App</span>
                 </a>
             </div>
         </div>
@@ -1258,7 +1276,8 @@
         <!-- Hero Section -->
         <section class="hero-section">
             <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="announcement-banner">
-                <span>🔥 TermuxHiveBear • El Origen del Proyecto</span>
+                <img src="assets/termux-logo.png" alt="Termux" style="width: 18px; height: 18px; border-radius: 3px;">
+                <span>TermuxHiveBear • El Origen del Proyecto</span>
                 <span style="color: var(--emerald); font-weight: 700;">• Repositorio Oficial en GitHub →</span>
             </a>
 
@@ -1272,7 +1291,8 @@
 
             <div class="hero-actions">
                 <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="btn-hero-termux">
-                    <span>📱 TermuxHiveBear Repo ⭐</span>
+                    <img src="assets/termux-logo.png" alt="Termux" style="width: 20px; height: 20px; border-radius: 4px;">
+                    <span>TermuxHiveBear Repo ⭐</span>
                 </a>
                 <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64-setup.exe" class="btn-hero-primary" id="hero-smart-btn">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -1329,19 +1349,24 @@
             <span class="termux-badge-origin">⭐ EL ORIGEN DEL PROYECTO • CREADO POR @kuromi04</span>
             <div class="termux-grid">
                 <div>
-                    <h2 class="termux-title">TermuxHiveBear: El Corazón donde Nace la Manada</h2>
+                    <h2 class="termux-title">
+                        <img src="assets/termux-logo.png" alt="Termux Logo" style="width: 38px; height: 38px; border-radius: 6px;">
+                        TermuxHiveBear: El Corazón donde Nace la Manada
+                    </h2>
                     <p class="termux-desc">
                         HiveBear nació originalmente en Android gracias a <strong>Termux</strong>. Esta distribución de la CLI oficial escrita en Rust permite convertir cualquier celular o tablet Android en un nodo servidor de IA las 24 horas del día sin necesidad de permisos Root ni sobrecalentar el procesador.
                     </p>
                     <div class="termux-cta-box">
                         <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="btn-termux-repo">
-                            🚀 Ir al Repositorio TermuxHiveBear ⭐
+                            <img src="assets/termux-logo.png" alt="Termux" style="width: 20px; height: 20px; border-radius: 4px;">
+                            <span>Ir al Repositorio TermuxHiveBear ⭐</span>
                         </a>
                     </div>
                 </div>
                 <div class="termux-code-widget">
                     <div class="termux-widget-header">
-                        <span>📱 Instalador Automático de 1 Línea para Termux</span>
+                        <img src="assets/termux-logo.png" alt="Termux" style="width: 18px; height: 18px; border-radius: 3px;">
+                        <span>Instalador Automático de 1 Línea para Termux</span>
                     </div>
                     <div style="font-size: 0.85rem; color: #a7f3d0; word-break: break-all; margin-bottom: 1rem;">
                         curl -sSL https://raw.githubusercontent.com/kuromi04/TermuxHiveBear/main/install.sh | bash
@@ -1487,7 +1512,8 @@
             <!-- Hub Selector Tabs -->
             <div class="hub-tabs">
                 <button class="hub-tab-btn active tab-termux-highlight" id="tab-btn-termux" onclick="selectTab('termux')">
-                    📱 Termux Engine (Origen)
+                    <img src="assets/termux-logo.png" alt="Termux" style="width: 18px; height: 18px; border-radius: 3px;">
+                    <span>Termux Engine (Origen)</span>
                 </button>
                 <button class="hub-tab-btn" id="tab-btn-windows" onclick="selectTab('windows')">
                     <span class="tab-badge-recommended" id="badge-os-windows">Tu SO</span>
@@ -1511,7 +1537,10 @@
             <div class="hub-panel active" id="panel-termux">
                 <div class="hub-grid">
                     <div class="hub-main-card" style="border-color: rgba(16, 185, 129, 0.4);">
-                        <h3 class="hub-title" style="color: var(--emerald);">📱 TermuxHiveBear (Origen del Proyecto)</h3>
+                        <h3 class="hub-title" style="color: var(--emerald);">
+                            <img src="assets/termux-logo.png" alt="Termux" style="width: 28px; height: 28px; border-radius: 5px;">
+                            TermuxHiveBear (Origen del Proyecto)
+                        </h3>
                         <p class="hub-subtitle">La distribución nativa para Termux en Android. Convierte tu celular en un nodo servidor de la red P2P las 24/7 sin root.</p>
                         <div class="code-box" style="border-color: rgba(16, 185, 129, 0.4);">
                             <code>curl -sSL https://raw.githubusercontent.com/kuromi04/TermuxHiveBear/main/install.sh | bash</code>
@@ -1519,7 +1548,8 @@
                         </div>
                         <div class="hub-dl-buttons" style="margin-top: 1.5rem; margin-bottom: 0;">
                             <a href="https://github.com/kuromi04/TermuxHiveBear" target="_blank" rel="noopener" class="btn-download-primary" style="background: var(--emerald); color: #04060a;">
-                                🚀 Ir a TermuxHiveBear Repo ⭐
+                                <img src="assets/termux-logo.png" alt="Termux" style="width: 18px; height: 18px; border-radius: 3px;">
+                                <span>Ir a TermuxHiveBear Repo ⭐</span>
                             </a>
                         </div>
                     </div>
