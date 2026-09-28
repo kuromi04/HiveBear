@@ -261,7 +261,19 @@ fn generate_blocking(
         .str_to_token(&prompt, AddBos::Always)
         .map_err(|e| InferenceError::GenerationError(format!("Tokenization failed: {e}")))?;
 
+    if tokens.is_empty() {
+        return Err(InferenceError::GenerationError("Prompt tokenization produced empty tokens".into()));
+    }
+
     let n_ctx = config.context_length;
+    if tokens.len() > n_ctx as usize {
+        return Err(InferenceError::GenerationError(format!(
+            "Prompt length ({} tokens) exceeds context length ({} tokens)",
+            tokens.len(),
+            n_ctx
+        )));
+    }
+
     let n_threads = config.threads.unwrap_or(num_cpus() as u32);
 
     let ctx_params = LlamaContextParams::default()
@@ -278,19 +290,31 @@ fn generate_blocking(
     let seed = config.seed.unwrap_or(42) as u32;
     let mut sampler = build_sampler(&loaded.model, req, seed);
 
-    // Process prompt tokens
-    let mut batch = LlamaBatch::new(tokens.len(), 1);
-    batch
-        .add_sequence(&tokens, 0, true)
-        .map_err(|e| InferenceError::GenerationError(format!("Batch add failed: {e}")))?;
+    // Process prompt tokens in chunks matching config.batch_size
+    let batch_capacity = (config.batch_size as usize).max(1);
+    let mut batch = LlamaBatch::new(batch_capacity, 1);
 
-    ctx.decode(&mut batch)
-        .map_err(|e| InferenceError::GenerationError(format!("Prompt decode failed: {e}")))?;
+    for (chunk_idx, chunk) in tokens.chunks(batch_capacity).enumerate() {
+        batch.clear();
+        let start_pos = chunk_idx * batch_capacity;
+        for (i, &token) in chunk.iter().enumerate() {
+            let global_pos = (start_pos + i) as i32;
+            let is_last = (start_pos + i) == tokens.len() - 1;
+            batch
+                .add(token, global_pos, &[0], is_last)
+                .map_err(|e| InferenceError::GenerationError(format!("Batch add failed: {e}")))?;
+        }
+        ctx.decode(&mut batch)
+            .map_err(|e| InferenceError::GenerationError(format!("Prompt decode failed: {e}")))?;
+    }
 
     let mut output = String::new();
     let eos = loaded.model.token_eos();
 
     for n_decoded in (tokens.len() as i32..).take(req.max_tokens as usize) {
+        if n_decoded >= n_ctx as i32 {
+            break;
+        }
         let token = sampler.sample(&ctx, -1);
         sampler.accept(token);
 
@@ -338,7 +362,19 @@ fn stream_blocking(
         .str_to_token(&prompt, AddBos::Always)
         .map_err(|e| InferenceError::GenerationError(format!("Tokenization failed: {e}")))?;
 
+    if tokens.is_empty() {
+        return Err(InferenceError::GenerationError("Prompt tokenization produced empty tokens".into()));
+    }
+
     let n_ctx = config.context_length;
+    if tokens.len() > n_ctx as usize {
+        return Err(InferenceError::GenerationError(format!(
+            "Prompt length ({} tokens) exceeds context length ({} tokens)",
+            tokens.len(),
+            n_ctx
+        )));
+    }
+
     let n_threads = config.threads.unwrap_or(num_cpus() as u32);
 
     let ctx_params = LlamaContextParams::default()
@@ -355,19 +391,31 @@ fn stream_blocking(
     let seed = config.seed.unwrap_or(42) as u32;
     let mut sampler = build_sampler(&loaded.model, req, seed);
 
-    // Process prompt
-    let mut batch = LlamaBatch::new(tokens.len(), 1);
-    batch
-        .add_sequence(&tokens, 0, true)
-        .map_err(|e| InferenceError::GenerationError(format!("Batch add failed: {e}")))?;
+    // Process prompt tokens in chunks matching config.batch_size
+    let batch_capacity = (config.batch_size as usize).max(1);
+    let mut batch = LlamaBatch::new(batch_capacity, 1);
 
-    ctx.decode(&mut batch)
-        .map_err(|e| InferenceError::GenerationError(format!("Prompt decode failed: {e}")))?;
+    for (chunk_idx, chunk) in tokens.chunks(batch_capacity).enumerate() {
+        batch.clear();
+        let start_pos = chunk_idx * batch_capacity;
+        for (i, &token) in chunk.iter().enumerate() {
+            let global_pos = (start_pos + i) as i32;
+            let is_last = (start_pos + i) == tokens.len() - 1;
+            batch
+                .add(token, global_pos, &[0], is_last)
+                .map_err(|e| InferenceError::GenerationError(format!("Batch add failed: {e}")))?;
+        }
+        ctx.decode(&mut batch)
+            .map_err(|e| InferenceError::GenerationError(format!("Prompt decode failed: {e}")))?;
+    }
 
     let eos = loaded.model.token_eos();
     let mut accumulated = String::new();
 
     for n_decoded in (tokens.len() as i32..).take(req.max_tokens as usize) {
+        if n_decoded >= n_ctx as i32 {
+            break;
+        }
         let token = sampler.sample(&ctx, -1);
         sampler.accept(token);
 
