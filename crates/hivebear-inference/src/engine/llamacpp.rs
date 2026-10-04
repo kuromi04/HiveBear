@@ -277,7 +277,9 @@ fn generate_blocking(
         .map_err(|e| InferenceError::GenerationError(format!("Tokenization failed: {e}")))?;
 
     if tokens.is_empty() {
-        return Err(InferenceError::GenerationError("Prompt tokenization produced empty tokens".into()));
+        return Err(InferenceError::GenerationError(
+            "Prompt tokenization produced empty tokens".into(),
+        ));
     }
 
     let n_ctx = config.context_length;
@@ -378,7 +380,9 @@ fn stream_blocking(
         .map_err(|e| InferenceError::GenerationError(format!("Tokenization failed: {e}")))?;
 
     if tokens.is_empty() {
-        return Err(InferenceError::GenerationError("Prompt tokenization produced empty tokens".into()));
+        return Err(InferenceError::GenerationError(
+            "Prompt tokenization produced empty tokens".into(),
+        ));
     }
 
     let n_ctx = config.context_length;

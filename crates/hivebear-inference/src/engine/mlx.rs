@@ -16,6 +16,12 @@ static NEXT_HANDLE_ID: AtomicU64 = AtomicU64::new(800_000);
 
 pub struct MlxBackend;
 
+impl Default for MlxBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MlxBackend {
     pub fn new() -> Self {
         Self
@@ -138,7 +144,7 @@ impl InferenceBackend for MlxBackend {
         })
         .await
         .map_err(|e| InferenceError::GenerationError(format!("Task join error: {e}")))?
-        .map_err(|e| InferenceError::GenerationError(e))?;
+        .map_err(InferenceError::GenerationError)?;
 
         Ok(GenerateResponse::Text(text))
     }
@@ -163,7 +169,7 @@ impl InferenceBackend for MlxBackend {
             })
             .await
             .map_err(|e| InferenceError::GenerationError(format!("Task join error: {e}")))?
-            .map_err(|e| InferenceError::GenerationError(e))?;
+            .map_err(InferenceError::GenerationError)?;
 
             for word in text.split_inclusive(' ') {
                 yield Token {
