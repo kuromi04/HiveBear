@@ -184,26 +184,47 @@ impl Registry {
 
         let size_bytes = tokio::fs::metadata(&model_path).await?.len();
 
-        // GGUF models embed their tokenizer metadata directly inside the GGUF header.
-        // For non-GGUF models, attempt to download tokenizer.json if available.
-        if !file.filename.ends_with(".gguf") {
-            let tokenizer_url = format!(
-                "https://huggingface.co/{}/resolve/main/tokenizer.json",
-                repo_id
-            );
-            if let Err(e) = self
-                .downloader
-                .download(
-                    &tokenizer_url,
-                    &model_dir,
-                    "tokenizer.json",
-                    None,
-                    model_id,
-                    None,
-                )
-                .await
-            {
-                tracing::debug!("No tokenizer.json available: {e}");
+        // Always attempt to download tokenizer.json (required by Candle backend on mobile/fallback)
+        let tokenizer_url = format!(
+            "https://huggingface.co/{}/resolve/main/tokenizer.json",
+            repo_id
+        );
+        let mut has_tokenizer = false;
+        if self
+            .downloader
+            .download(&tokenizer_url, &model_dir, "tokenizer.json", None, model_id, None)
+            .await
+            .is_ok()
+        {
+            has_tokenizer = true;
+        }
+
+        if !has_tokenizer && file.filename.ends_with(".gguf") {
+            // Attempt to fetch base model from HF API tags
+            if let Ok(resp) = reqwest::get(format!("https://huggingface.co/api/models/{}", repo_id)).await {
+                if let Ok(json) = resp.json::<serde_json::Value>().await {
+                    if let Some(tags) = json.get("tags").and_then(|t| t.as_array()) {
+                        for tag in tags {
+                            if let Some(tag_str) = tag.as_str() {
+                                if tag_str.starts_with("base_model:") 
+                                    && !tag_str.starts_with("base_model:adapter:") 
+                                    && !tag_str.starts_with("base_model:quantized:") 
+                                {
+                                    let base_repo = tag_str.trim_start_matches("base_model:");
+                                    let fallback_url = format!("https://huggingface.co/{}/resolve/main/tokenizer.json", base_repo);
+                                    if self.downloader.download(&fallback_url, &model_dir, "tokenizer.json", None, model_id, None).await.is_ok() {
+                                        tracing::info!("Downloaded tokenizer.json from base model {}", base_repo);
+                                        has_tokenizer = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if !has_tokenizer {
+                tracing::debug!("No tokenizer.json could be resolved for {}", repo_id);
             }
         }
 
