@@ -119,3 +119,10 @@ pub enum ConnectionStrategy {
     HolePunch,
     Relay,
 }
+
+/// Discovers the local LAN IP address used to reach the internet.
+pub fn discover_local_ip() -> Option<std::net::IpAddr> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    Some(socket.local_addr().ok()?.ip())
+}

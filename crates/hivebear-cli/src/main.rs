@@ -427,6 +427,11 @@ fn maybe_start_mesh(
         format!("0.0.0.0:{}", config.mesh.port).parse().unwrap();
     let total_vram: u64 = hw.gpus.iter().map(|g| g.vram_bytes).sum();
 
+    let mut advertise_addr = listen_addr;
+    if let Some(ip) = hivebear_mesh::nat::discover_local_ip() {
+        advertise_addr.set_ip(ip);
+    }
+
     let local_info = hivebear_mesh::PeerInfo {
         node_id: node.local_id.clone(),
         hardware: hw.clone(),
@@ -436,7 +441,7 @@ fn maybe_start_mesh(
         latency_ms: None,
         tier,
         reputation_score: 1.0,
-        addr: listen_addr,
+        addr: advertise_addr,
         external_addr: None,
         nat_type: hivebear_mesh::NatType::Unknown,
         latency_map: std::collections::HashMap::new(),
@@ -1956,6 +1961,10 @@ async fn cmd_mesh(action: MeshAction) {
             ));
 
             let listen_addr: std::net::SocketAddr = format!("0.0.0.0:{port}").parse().unwrap();
+            let mut advertise_addr = listen_addr;
+            if let Some(ip) = hivebear_mesh::nat::discover_local_ip() {
+                advertise_addr.set_ip(ip);
+            }
 
             let local_info = hivebear_mesh::PeerInfo {
                 node_id: node.local_id.clone(),
@@ -1966,7 +1975,7 @@ async fn cmd_mesh(action: MeshAction) {
                 latency_ms: None,
                 tier,
                 reputation_score: 1.0,
-                addr: listen_addr,
+                addr: advertise_addr,
                 external_addr: None,
                 nat_type: hivebear_mesh::nat::NatType::Unknown,
                 latency_map: std::collections::HashMap::new(),
@@ -2578,6 +2587,10 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
         .unwrap_or_else(|_| hivebear_mesh::NodeIdentity::generate());
     let node_id_hex = identity.node_id.to_hex();
     let listen_addr: std::net::SocketAddr = format!("0.0.0.0:{port}").parse().unwrap();
+    let mut advertise_addr = listen_addr;
+    if let Some(ip) = hivebear_mesh::nat::discover_local_ip() {
+        advertise_addr.set_ip(ip);
+    }
     let local_info = hivebear_mesh::PeerInfo {
         node_id: identity.node_id.clone(),
         hardware: hw.clone(),
@@ -2587,7 +2600,7 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
         latency_ms: None,
         tier: hivebear_mesh::MeshTier::Free,
         reputation_score: 1.0,
-        addr: listen_addr,
+        addr: advertise_addr,
         external_addr: None,
         nat_type: hivebear_mesh::NatType::Unknown,
         latency_map: std::collections::HashMap::new(),

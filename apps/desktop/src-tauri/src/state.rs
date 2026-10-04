@@ -114,6 +114,11 @@ impl AppState {
             .map_err(|e| format!("Invalid mesh port {}: {e}", port))?;
         let total_vram: u64 = self.profile.gpus.iter().map(|g| g.vram_bytes).sum();
 
+        let mut advertise_addr = listen_addr;
+        if let Some(ip) = hivebear_mesh::nat::discover_local_ip() {
+            advertise_addr.set_ip(ip);
+        }
+
         let local_info = hivebear_mesh::PeerInfo {
             node_id: node.local_id.clone(),
             hardware: self.profile.clone(),
@@ -123,7 +128,7 @@ impl AppState {
             latency_ms: None,
             tier,
             reputation_score: 1.0,
-            addr: listen_addr,
+            addr: advertise_addr,
             external_addr: None,
             nat_type: hivebear_mesh::NatType::Unknown,
             latency_map: std::collections::HashMap::new(),
