@@ -76,7 +76,7 @@ export default function Chat() {
     let convId = activeId;
     if (!convId && loaded.length > 0) {
       const activeModel = loaded.find((m) => m.handle_id === activeHandleId);
-      const modelName = activeModel ? activeModel.model_path.split("/").pop() || "chat" : "chat";
+      const modelName = activeModel ? activeModel.model_path.split(/[/\\]/).pop() || "chat" : "chat";
       const title = msgText.length > 40 ? msgText.slice(0, 40) + "..." : msgText;
       try {
         const conv = await create(title, modelName);

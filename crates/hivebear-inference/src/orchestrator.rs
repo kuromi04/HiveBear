@@ -120,6 +120,19 @@ impl Orchestrator {
         let format = selector::detect_format(path)?;
         let local_result = selector::select_engine(&self.registry, format, &self.profile);
 
+        let mut load_config = config.clone();
+        if load_config.offload.auto && load_config.offload.gpu_layers.is_none() {
+            let model_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+            if model_size > 0 {
+                load_config.offload = crate::offload::calculate_offload(
+                    model_size,
+                    32,
+                    &self.profile,
+                    load_config.context_length,
+                );
+            }
+        }
+
         let backend = match local_result {
             Ok(b) => b,
             Err(local_err) => {
@@ -146,9 +159,9 @@ impl Orchestrator {
             }
         };
 
-        match backend.load_model(path, config).await {
+        match backend.load_model(path, &load_config).await {
             Ok(handle) => {
-                self.track_loaded_model(&handle, path, backend.engine_id(), config);
+                self.track_loaded_model(&handle, path, backend.engine_id(), &load_config);
                 Ok(handle)
             }
             Err(load_err) => {
@@ -166,8 +179,8 @@ impl Orchestrator {
                             reason: format!("Local load failed: {load_err}"),
                             model: path.display().to_string(),
                         });
-                        let handle = mesh.load_model(path, config).await?;
-                        self.track_loaded_model(&handle, path, mesh.engine_id(), config);
+                        let handle = mesh.load_model(path, &load_config).await?;
+                        self.track_loaded_model(&handle, path, mesh.engine_id(), &load_config);
                         return Ok(handle);
                     }
                 }

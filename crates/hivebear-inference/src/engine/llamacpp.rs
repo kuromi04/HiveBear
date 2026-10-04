@@ -110,8 +110,23 @@ impl InferenceBackend for LlamaCppBackend {
             });
             model_params = model_params.with_n_gpu_layers(gpu_layers);
 
-            let model = LlamaModel::load_from_file(&backend, &path, &model_params)
-                .map_err(|e| InferenceError::LoadError(format!("Failed to load model: {e}")))?;
+            let model = match LlamaModel::load_from_file(&backend, &path, &model_params) {
+                Ok(m) => m,
+                Err(e) if gpu_layers > 0 => {
+                    tracing::warn!("Failed to load model on GPU ({e}), falling back to CPU mode (0 GPU layers)");
+                    let mut cpu_params = LlamaModelParams::default();
+                    if config.use_mmap {
+                        cpu_params = cpu_params.with_use_mmap(true);
+                    }
+                    if config.use_mlock {
+                        cpu_params = cpu_params.with_use_mlock(true);
+                    }
+                    cpu_params = cpu_params.with_n_gpu_layers(0);
+                    LlamaModel::load_from_file(&backend, &path, &cpu_params)
+                        .map_err(|e2| InferenceError::LoadError(format!("Failed to load model on CPU: {e2}")))?
+                }
+                Err(e) => return Err(InferenceError::LoadError(format!("Failed to load model: {e}"))),
+            };
 
             tracing::info!(
                 path = %path.display(),
