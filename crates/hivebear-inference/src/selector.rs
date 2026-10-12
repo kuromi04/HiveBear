@@ -194,8 +194,11 @@ mod tests {
         let registry = EngineRegistry::new();
         let profile = test_profile("linux", "x86_64", true);
         let result = select_engine(&registry, ModelFormat::Gguf, &profile);
-        // Should find some engine (either llama.cpp or candle depending on features)
-        assert!(result.is_ok());
+        if cfg!(any(feature = "llamacpp", feature = "candle")) {
+            assert!(result.is_ok());
+        } else {
+            assert!(result.is_err());
+        }
     }
 
     #[test]
@@ -203,7 +206,11 @@ mod tests {
         let registry = EngineRegistry::new();
         let profile = test_profile("linux", "x86_64", false);
         let result = select_engine(&registry, ModelFormat::Gguf, &profile);
-        assert!(result.is_ok());
+        if cfg!(any(feature = "llamacpp", feature = "candle")) {
+            assert!(result.is_ok());
+        } else {
+            assert!(result.is_err());
+        }
     }
 
     #[test]
