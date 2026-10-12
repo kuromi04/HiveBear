@@ -25,7 +25,9 @@ pub fn get_mesh_status(state: State<'_, AppState>) -> CmdResult<MeshStatus> {
         enabled: config.mesh.enabled,
         tier: config.mesh.tier.clone(),
         port: config.mesh.port,
-        coordination_server: config.mesh.coordination_server.clone(),
+        // Normalized so the UI and the leaderboard fetch always get a usable
+        // absolute URL (no missing scheme, no trailing slash).
+        coordination_server: config.mesh.normalized_coordination_server(),
         max_contribution_percent: config.mesh.max_contribution_percent,
         min_reputation: config.mesh.min_reputation,
         verification_rate: config.mesh.verification_rate,
@@ -38,11 +40,20 @@ pub fn get_mesh_config(state: State<'_, AppState>) -> CmdResult<MeshConfig> {
         .config
         .lock()
         .map_err(|_| String::from("Config lock poisoned"))?;
-    Ok(config.mesh.clone())
+    let mut mesh = config.mesh.clone();
+    // Round-tripping an unnormalized value through save_mesh_config would
+    // otherwise persist it again.
+    mesh.coordination_server = mesh.normalized_coordination_server();
+    Ok(mesh)
 }
 
 #[tauri::command]
-pub fn save_mesh_config(state: State<'_, AppState>, mesh_config: MeshConfig) -> CmdResult<()> {
+pub fn save_mesh_config(state: State<'_, AppState>, mut mesh_config: MeshConfig) -> CmdResult<()> {
+    // Heal the endpoint instead of persisting a value that would fail later:
+    // an empty value falls back to the built-in coordinator, a missing scheme is
+    // added, and a trailing slash is removed (it used to turn `/register` into
+    // `//register` -> 404).
+    mesh_config.coordination_server = mesh_config.normalized_coordination_server();
     let mut config = state
         .config
         .lock()
@@ -64,6 +75,17 @@ pub struct MeshConnectionStatus {
     pub peer_count: usize,
     /// The node's hex-encoded public key (if running).
     pub node_id: Option<String>,
+    /// Peers the node knows about (discovered; connected or still connecting).
+    pub known_peers: usize,
+    /// True once the coordination server accepted this node's registration.
+    /// `false` while running LAN-only.
+    pub registered: bool,
+    /// User-actionable reason the mesh is degraded (unreachable coordinator,
+    /// rejected registration, transport failure), so the UI never shows a
+    /// silent zero-peer state.
+    pub last_error: Option<String>,
+    /// Normalized coordination-server URL currently in use.
+    pub coordinator_url: String,
 }
 
 /// Start the mesh node: register with the coordination server and begin heartbeats.
@@ -82,17 +104,33 @@ pub async fn leave_mesh(state: State<'_, AppState>) -> CmdResult<()> {
 /// Get the live mesh connection status.
 #[tauri::command]
 pub fn get_mesh_connection_status(state: State<'_, AppState>) -> CmdResult<MeshConnectionStatus> {
+    let coordinator_url = {
+        let config = state
+            .config
+            .lock()
+            .map_err(|_| String::from("Config lock poisoned"))?;
+        config.mesh.normalized_coordination_server()
+    };
+
     let node = state.mesh_node.lock().unwrap_or_else(|e| e.into_inner());
     match node.as_ref() {
         Some(n) => Ok(MeshConnectionStatus {
             running: n.is_running(),
             peer_count: n.peer_count(),
             node_id: Some(n.local_id.to_hex()),
+            known_peers: n.known_peer_count(),
+            registered: n.is_registered(),
+            last_error: n.last_error(),
+            coordinator_url,
         }),
         None => Ok(MeshConnectionStatus {
             running: false,
             peer_count: 0,
             node_id: None,
+            known_peers: 0,
+            registered: false,
+            last_error: None,
+            coordinator_url,
         }),
     }
 }

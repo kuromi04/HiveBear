@@ -9,7 +9,10 @@ pub enum InferenceError {
     #[error("Unsupported model format: {0}")]
     UnsupportedFormat(String),
 
-    #[error("No compatible engine available for format '{format}' on this platform")]
+    #[error(
+        "No usable inference engine for format '{format}' on this platform \
+         (this build has no real backend compiled in for it). Update or reinstall HiveBear."
+    )]
     NoEngineAvailable { format: String },
 
     #[error("Engine '{engine}' is not compiled in (missing feature flag)")]

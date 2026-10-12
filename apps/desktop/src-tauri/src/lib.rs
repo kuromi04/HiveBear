@@ -49,6 +49,30 @@ pub fn run() {
             }
 
             app.manage(app_state);
+
+            // Honor `config.mesh.auto_join` at startup. Previously this flag was
+            // only read by the CLI, so the desktop/mobile app registered with the
+            // coordinator only after the user pressed "Join" on the Mesh page.
+            //
+            // This MUST run inside the async runtime: `MeshNode::start_background`
+            // calls `tokio::spawn`, which panics when invoked from the synchronous
+            // setup thread ("there is no reactor running").
+            let auto_join = {
+                let state = app.state::<AppState>();
+                let config = state.config.lock().unwrap_or_else(|e| e.into_inner());
+                config.mesh.enabled && config.mesh.auto_join
+            };
+            if auto_join {
+                let handle = app.handle().clone();
+                let _join = tauri::async_runtime::spawn(async move {
+                    let state = handle.state::<AppState>();
+                    match state.start_mesh() {
+                        Ok(()) => tracing::info!("Mesh auto-join started"),
+                        Err(e) => tracing::warn!("Mesh auto-join failed: {e}"),
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

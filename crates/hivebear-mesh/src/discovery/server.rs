@@ -17,10 +17,16 @@ pub struct CoordinationServerClient {
     base_url: String,
     http: reqwest::Client,
     node_info: tokio::sync::Mutex<Option<PeerInfo>>,
+    /// Last failure, surfaced to the UI so a zero-peer state is explained.
+    last_error: std::sync::Mutex<Option<String>>,
 }
 
 impl CoordinationServerClient {
     pub fn new(base_url: String) -> Self {
+        // Heal the value before it becomes a request prefix: `34.66.188.245`
+        // (no scheme) is a relative URL, and a trailing slash turns
+        // `{base}/register` into `//register` -> 404.
+        let base_url = hivebear_core::config::normalize_coordination_server(&base_url);
         if !base_url.starts_with("https://") {
             tracing::warn!(
                 "Coordination server URL uses HTTP ({}). Credentials will be sent in cleartext. \
@@ -35,7 +41,26 @@ impl CoordinationServerClient {
                 .build()
                 .unwrap_or_default(),
             node_info: tokio::sync::Mutex::new(None),
+            last_error: std::sync::Mutex::new(None),
         }
+    }
+
+    /// Effective, normalized coordination-server URL.
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    fn set_error(&self, message: Option<String>) {
+        *self.last_error.lock().unwrap_or_else(|e| e.into_inner()) = message;
+    }
+
+    /// Build an actionable message for a transport-level failure.
+    fn unreachable(&self, action: &str, e: &reqwest::Error) -> String {
+        format!(
+            "coordination server {} unreachable at {} ({e}). Start hivebear-coordinator \
+             (`cargo run -p hivebear-coordinator`) or set the correct URL in Settings → Mesh.",
+            action, self.base_url
+        )
     }
 }
 
@@ -51,27 +76,35 @@ impl PeerDiscovery for CoordinationServerClient {
         match self.http.post(&url).json(info).send().await {
             Ok(resp) if resp.status().is_success() => {
                 debug!("Registered successfully with coordination server");
+                self.set_error(None);
                 Ok(())
             }
             Ok(resp) => {
                 let status = resp.status();
                 let body = resp.text().await.unwrap_or_default();
                 warn!("Registration failed: {status} — {body}");
-                Err(MeshError::Discovery(format!(
-                    "Coordination server returned {status}"
-                )))
+                let message = format!(
+                    "coordination server rejected registration at {url}: HTTP {status}{}{}",
+                    if body.trim().is_empty() { "" } else { " — " },
+                    body.trim().chars().take(200).collect::<String>()
+                );
+                self.set_error(Some(message.clone()));
+                Err(MeshError::Discovery(message))
             }
             Err(e) if e.is_connect() || e.is_timeout() => {
-                // Server not reachable — degrade gracefully
-                warn!(
-                    "Coordination server at {} not reachable: {e}. Running in local-only mode.",
-                    self.base_url
-                );
-                Ok(())
+                // Report honestly: the caller decides whether to keep running
+                // (LAN discovery and retries still work) and the UI shows why
+                // there are no peers.
+                let message = self.unreachable("not reachable for registration", &e);
+                warn!("{message}");
+                self.set_error(Some(message.clone()));
+                Err(MeshError::Discovery(message))
             }
-            Err(e) => Err(MeshError::Discovery(format!(
-                "Failed to contact coordination server: {e}"
-            ))),
+            Err(e) => {
+                let message = format!("failed to contact coordination server {url}: {e}");
+                self.set_error(Some(message.clone()));
+                Err(MeshError::Discovery(message))
+            }
         }
     }
 
@@ -89,16 +122,24 @@ impl PeerDiscovery for CoordinationServerClient {
                     .await
                     .map_err(|e| MeshError::Discovery(format!("Failed to parse peer list: {e}")))?;
                 debug!("Found {} peers from coordination server", peers.len());
+                self.set_error(None);
                 Ok(peers)
             }
             Ok(resp) => {
                 let status = resp.status();
                 warn!("Peer discovery returned {status}");
-                Ok(Vec::new())
+                let message = format!(
+                    "coordination server returned HTTP {status} for {url}. Check that the URL \
+                     points at hivebear-coordinator (no trailing slash, correct port)."
+                );
+                self.set_error(Some(message.clone()));
+                Err(MeshError::Discovery(message))
             }
             Err(e) if e.is_connect() || e.is_timeout() => {
-                warn!("Coordination server not reachable for peer discovery: {e}");
-                Ok(Vec::new())
+                let message = self.unreachable("not reachable for peer discovery", &e);
+                warn!("{message}");
+                self.set_error(Some(message.clone()));
+                Err(MeshError::Discovery(message))
             }
             Err(e) => Err(MeshError::Discovery(format!("Peer discovery failed: {e}"))),
         }
@@ -113,30 +154,57 @@ impl PeerDiscovery for CoordinationServerClient {
 
         let url = format!("{}/heartbeat", self.base_url);
         match self.http.post(&url).json(info).send().await {
-            Ok(resp) if resp.status().is_success() => Ok(()),
+            Ok(resp) if resp.status().is_success() => {
+                self.set_error(None);
+                Ok(())
+            }
             Ok(resp) => {
+                // A rejected heartbeat means the coordinator does not know us
+                // (or does not accept our payload) — say so, so the caller can
+                // re-register instead of silently losing the node.
                 let status = resp.status();
                 warn!("Heartbeat returned {status}");
-                Ok(()) // Non-fatal
+                let message =
+                    format!("coordination server rejected heartbeat at {url}: HTTP {status}");
+                self.set_error(Some(message.clone()));
+                Err(MeshError::Discovery(message))
             }
             Err(e) if e.is_connect() || e.is_timeout() => {
-                debug!("Heartbeat skipped (server unreachable): {e}");
-                Ok(()) // Non-fatal
+                let message = self.unreachable("not reachable for heartbeat", &e);
+                debug!("{message}");
+                self.set_error(Some(message.clone()));
+                Err(MeshError::Discovery(message))
             }
-            Err(e) => Err(MeshError::Discovery(format!("Heartbeat failed: {e}"))),
+            Err(e) => {
+                let message = format!("heartbeat failed: {e}");
+                self.set_error(Some(message.clone()));
+                Err(MeshError::Discovery(message))
+            }
         }
     }
 
     async fn deregister(&self) -> Result<()> {
         let info = self.node_info.lock().await;
-        if info.is_none() {
+        let Some(peer) = info.as_ref() else {
             return Ok(());
-        }
+        };
 
-        let url = format!("{}/deregister", self.base_url);
+        // The coordinator removes a node from `?node_id=` (see
+        // `hivebear-coordinator`'s `deregister_node`). Without the query
+        // parameter the DELETE is a no-op, so the node stayed listed until the
+        // coordinator's 60s stale-node sweep — the app reported "left the mesh"
+        // while other nodes could still see it.
+        let node_id = peer.node_id.to_hex();
+        let url = format!("{}/deregister?node_id={}", self.base_url, node_id);
         match self.http.delete(&url).send().await {
-            Ok(_) => {
-                debug!("Deregistered from coordination server");
+            Ok(resp) if resp.status().is_success() => {
+                debug!("Deregistered node {node_id} from coordination server");
+            }
+            Ok(resp) => {
+                debug!(
+                    "Deregister returned {} (non-fatal, the node times out)",
+                    resp.status()
+                );
             }
             Err(e) => {
                 // Non-fatal — node will eventually time out
@@ -147,6 +215,13 @@ impl PeerDiscovery for CoordinationServerClient {
         drop(info);
         *self.node_info.lock().await = None;
         Ok(())
+    }
+
+    fn last_error(&self) -> Option<String> {
+        self.last_error
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 }
 
@@ -422,5 +497,37 @@ impl CoordinationServerClient {
                 "Claim karma rejected: {err_msg}"
             )))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn base_url_is_normalized() {
+        // No scheme: would otherwise be a relative URL and every request would
+        // fail before leaving the process.
+        let client = CoordinationServerClient::new("34.66.188.245".into());
+        assert_eq!(client.base_url(), "http://34.66.188.245");
+
+        // Trailing slash: would make the client POST to `//register` (404).
+        let client = CoordinationServerClient::new("http://34.66.188.245/".into());
+        assert_eq!(client.base_url(), "http://34.66.188.245");
+    }
+
+    #[tokio::test]
+    async fn explicit_ports_are_preserved() {
+        let client = CoordinationServerClient::new("http://example.test:7879".into());
+        assert_eq!(client.base_url(), "http://example.test:7879");
+
+        let client = CoordinationServerClient::new("https://mesh.example.test".into());
+        assert_eq!(client.base_url(), "https://mesh.example.test");
+    }
+
+    #[tokio::test]
+    async fn last_error_is_none_before_any_request() {
+        let client = CoordinationServerClient::new("http://127.0.0.1:1".into());
+        assert_eq!(client.last_error(), None);
     }
 }

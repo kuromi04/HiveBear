@@ -1,8 +1,14 @@
+pub mod endpoint;
 pub mod paths;
 
 use paths::AppPaths;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+pub use endpoint::{
+    normalize_coordination_server, validate_coordination_server, CoordinatorUrlError,
+    DEFAULT_COORDINATOR_PORT, DEFAULT_COORDINATOR_URL,
+};
 
 /// HiveBear configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,7 +62,9 @@ pub struct MeshConfig {
     pub auto_join: bool,
     /// Port for QUIC transport.
     pub port: u16,
-    /// URL of the coordination server.
+    /// URL of the coordination server. Stored in normalized form
+    /// (`scheme://host[:port]`, no trailing slash) — see
+    /// [`endpoint::normalize_coordination_server`].
     pub coordination_server: String,
     /// Bootstrap coordination servers for initial discovery.
     #[serde(default = "default_bootstrap_servers")]
@@ -117,6 +125,17 @@ fn default_compression() -> String {
 
 fn default_transfer_dtype() -> String {
     "auto".into()
+}
+
+impl MeshConfig {
+    /// Canonical coordination-server URL (`scheme://host[:port][/path]`).
+    ///
+    /// Adds a missing scheme and strips trailing slashes; an explicit port is
+    /// preserved exactly, and a URL without one keeps the scheme default (the
+    /// live deployment is plain HTTP on port 80).
+    pub fn normalized_coordination_server(&self) -> String {
+        normalize_coordination_server(&self.coordination_server)
+    }
 }
 
 /// API server configuration.
@@ -254,7 +273,7 @@ impl Default for MeshConfig {
             enabled: true,
             auto_join: true,
             port: 7878,
-            coordination_server: "http://34.66.188.245".into(),
+            coordination_server: DEFAULT_COORDINATOR_URL.into(),
             bootstrap_servers: default_bootstrap_servers(),
             stun_servers: default_stun_servers(),
             relay_servers: default_relay_servers(),
@@ -336,6 +355,17 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Heal user-editable fields into canonical form.
+    ///
+    /// Currently normalizes the coordination-server URL: a missing scheme is
+    /// filled in and trailing slashes are stripped so the client never requests
+    /// `{base}//register` (404). An explicit port is always preserved — the
+    /// built-in deployment is plain HTTP on port 80, so a URL without a port
+    /// must keep the scheme default rather than have one invented.
+    pub fn normalize(&mut self) {
+        self.mesh.coordination_server = self.mesh.normalized_coordination_server();
+    }
+
     /// Load config from the default location, or return defaults.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load() -> Self {
@@ -356,6 +386,7 @@ impl Config {
             Ok(contents) => match toml::from_str::<Config>(&contents) {
                 Ok(mut config) => {
                     config.cloud.migrate_legacy();
+                    config.normalize();
                     config
                 }
                 Err(e) => {
@@ -419,5 +450,42 @@ mod tests {
         let deserialized: Config = toml::from_str(&serialized).unwrap();
         assert_eq!(config.max_memory_usage, deserialized.max_memory_usage);
         assert_eq!(config.min_tokens_per_sec, deserialized.min_tokens_per_sec);
+    }
+
+    #[test]
+    fn test_default_mesh_endpoint_matches_the_live_coordinator() {
+        let mesh = MeshConfig::default();
+        assert_eq!(mesh.coordination_server, DEFAULT_COORDINATOR_URL);
+        assert_eq!(mesh.coordination_server, "http://34.66.188.245");
+        assert_eq!(
+            mesh.normalized_coordination_server(),
+            mesh.coordination_server,
+            "the built-in default must survive normalization unchanged"
+        );
+    }
+
+    #[test]
+    fn test_legacy_config_is_normalized_on_load() {
+        let dir = std::env::temp_dir().join(format!(
+            "hivebear-config-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+
+        // Existing config files may carry a trailing slash (which turns
+        // `{base}/register` into `//register` -> 404) or no scheme at all.
+        let mut config = Config::default();
+        config.mesh.coordination_server = "34.66.188.245/".into();
+        config.save_to(&path).unwrap();
+
+        let loaded = Config::load_from(&path);
+        assert_eq!(
+            loaded.mesh.coordination_server, "http://34.66.188.245",
+            "load must heal missing scheme + trailing slash"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

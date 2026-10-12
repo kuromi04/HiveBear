@@ -44,6 +44,12 @@ export interface DisplayMessage {
   toolCallId?: string;
 }
 
+/// `String(error)` on an Error subclass re-prepends "Error: ", which would render
+/// as "Error: Error: ..." in the transcript.
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 export function useChat(handleId: number | null) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -76,6 +82,7 @@ export function useChat(handleId: number | null) {
     streamBuffer.current = "";
 
     let fullReply: string | null = null;
+    let errorShown = false;
 
     try {
       unlistenRefs.current.token = await listen<string>("chat-token", (event) => {
@@ -90,6 +97,7 @@ export function useChat(handleId: number | null) {
       });
 
       unlistenRefs.current.error = await listen<string>("chat-error", (event) => {
+        errorShown = true;
         setMessages((prev) => {
           const updated = [...prev];
           updated[updated.length - 1] = { role: "assistant", content: `Error: ${event.payload}` };
@@ -98,11 +106,28 @@ export function useChat(handleId: number | null) {
       });
 
       fullReply = await streamChat(handleId, chatMessages, opts?.temperature, opts?.maxTokens);
+
+      // Tokens are delivered through window events, so `fullReply` is only the
+      // text that will be persisted. A turn that ends with neither tokens nor an
+      // error must not leave an empty assistant bubble — that looks exactly like
+      // "the model does not respond".
+      if (!stopRef.current && !errorShown && !(fullReply ?? "").trim()) {
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: "assistant",
+            content:
+              "Error: the model returned no output. The loaded engine produced nothing for this prompt — " +
+              "unload and load the model again, or install a different model from the Model Browser.",
+          };
+          return updated;
+        });
+      }
     } catch (e) {
       if (!stopRef.current) {
         setMessages((prev) => {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: "assistant", content: `Error: ${String(e)}` };
+          updated[updated.length - 1] = { role: "assistant", content: `Error: ${errorText(e)}` };
           return updated;
         });
       }

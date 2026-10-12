@@ -21,12 +21,13 @@
 <p align="center">
   <a href="https://github.com/kuromi04/TermuxHiveBear"><img src="https://img.shields.io/badge/Termux-Supported-brightgreen?logo=android" alt="Termux Support" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
-  <a href="https://github.com/kuromi04/HiveBear/releases/tag/v0.2.14"><img src="https://img.shields.io/badge/release-v0.2.14-cyan.svg" alt="Latest Release" /></a>
+  <a href="https://github.com/kuromi04/HiveBear/releases/latest"><img src="https://img.shields.io/badge/release-v0.2.18-cyan.svg" alt="Latest Release" /></a>
+  <a href="https://github.com/kuromi04/HiveBear/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/kuromi04/HiveBear/release.yml?label=release%20build" alt="Release build" /></a>
   <a href="https://kuromi04.github.io/HiveBear/"><img src="https://img.shields.io/badge/Official%20Website-Online-ff007f.svg" alt="Official Website" /></a>
 </p>
 
 <p align="center">
-  <strong>Direct Downloads (v0.2.14):</strong><br>
+  <strong>Direct Downloads (latest release):</strong><br>
   <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x64-setup.exe"><img src="https://img.shields.io/badge/Windows-Download%20.exe-0078D6?logo=windows&logoColor=white" alt="Download Windows .exe" /></a>
   <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear.dmg"><img src="https://img.shields.io/badge/macOS-Download%20.dmg-000000?logo=apple&logoColor=white" alt="Download macOS .dmg" /></a>
   <a href="https://github.com/kuromi04/HiveBear/releases/latest/download/HiveBear-x86_64.AppImage"><img src="https://img.shields.io/badge/Linux-Download%20.AppImage-FCC624?logo=linux&logoColor=black" alt="Download Linux .AppImage" /></a>
@@ -71,6 +72,31 @@
                       ▲                                                       ▲
                       └───────────── Direct P2P Encrypted QUIC Stream ────────┘
 ```
+
+---
+
+### 🔌 Mesh / Coordination Server (troubleshooting)
+
+The desktop and mobile apps join the mesh automatically at launch when `mesh.enabled` and `mesh.auto_join`
+are true (both default to `true`) — you no longer need to press "Join" on the Mesh page.
+
+- **Default coordinator:** `http://34.66.188.245` (plain HTTP on port 80). It can be changed at any time in
+  **Mesh → Coordination Server**; the URL is normalized and validated before it is used.
+- **Self-hosting:** run the coordinator on any host reachable by all your nodes, then point the app at it:
+
+  ```bash
+  cargo run --release -p hivebear-coordinator -- --port 7879
+  # or, with Docker:  docker run -p 7879:7879 hivebear-coordinator
+  # then set coordination_server = "http://YOUR-HOST:7879"
+  ```
+- **`peers: 0` is expected on an empty network.** A node only appears once a *second* node registers and
+  heartbeats to the same coordinator. Check the live registry from any machine:
+
+  ```bash
+  curl http://34.66.188.245/dashboard     # {"nodes":[...],"total_active_nodes":N}
+  ```
+- **Android:** release APKs are built with `usesCleartextTraffic="true"` because a plain-`http://`
+  coordinator is blocked by Android's API 28+ default policy. Keep that flag if you self-host over HTTP.
 
 ---
 
@@ -130,7 +156,7 @@ Before building, install all required dependencies automatically:
    npx @tauri-apps/cli build
    ```
 2. The setup installer will be generated at:
-   `target/release/bundle/nsis/HiveBear_0.2.0_x64-setup.exe`
+   `target/release/bundle/nsis/HiveBear_<version>_x64-setup.exe`
 
 #### 🍏 macOS (Apple Silicon M1/M2/M3/M4 & Intel)
 1. Install dependencies & build:
@@ -216,7 +242,7 @@ Instala todos los requisitos previos automáticamente según tu sistema:
    npx @tauri-apps/cli build
    ```
 2. El instalador ejecutable estará listo en:
-   `target/release/bundle/nsis/HiveBear_0.2.0_x64-setup.exe`
+   `target/release/bundle/nsis/HiveBear_<version>_x64-setup.exe`
 
 #### 🍏 macOS (Apple Silicon M1/M2/M3/M4 & Intel)
 1. Instala herramientas de compilación y empaqueta:

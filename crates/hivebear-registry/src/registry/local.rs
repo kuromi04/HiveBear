@@ -64,6 +64,26 @@ impl LocalIndex {
         self.save()
     }
 
+    /// Insert or replace an entry without persisting.
+    ///
+    /// Used by reconciliation so a batch of edits costs a single
+    /// [`Self::save`]. Callers that need to know whether a write is required
+    /// can just record that they called this.
+    pub(crate) fn upsert_unsaved(&mut self, metadata: ModelMetadata) {
+        if let Some(existing) = self.entries.iter_mut().find(|e| e.id == metadata.id) {
+            *existing = metadata;
+        } else {
+            self.entries.push(metadata);
+        }
+    }
+
+    /// Remove an entry without persisting. Returns `true` when it existed.
+    pub(crate) fn remove_unsaved(&mut self, model_id: &str) -> bool {
+        let before = self.entries.len();
+        self.entries.retain(|e| e.id != model_id);
+        self.entries.len() != before
+    }
+
     /// Find an entry by ID.
     pub fn find(&self, model_id: &str) -> Option<&ModelMetadata> {
         self.entries.iter().find(|e| e.id == model_id)

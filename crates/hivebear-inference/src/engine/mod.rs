@@ -61,6 +61,18 @@ pub trait InferenceBackend: Send + Sync {
     /// (compiled in, libraries found, etc.)
     fn is_available(&self) -> bool;
 
+    /// Whether this backend is a placeholder that does not perform real inference.
+    ///
+    /// Stub backends (see [`dummy::DummyBackend`]) are always "available" so tests
+    /// and the CLI can exercise the orchestrator without models, but engine
+    /// selection must never pick one to answer a real user request: a stub either
+    /// returns canned text or nothing at all, which reaches the user as "the model
+    /// does not respond". Never returned by [`EngineRegistry::get_real`] or
+    /// [`EngineRegistry::find_for_format`].
+    fn is_stub(&self) -> bool {
+        false
+    }
+
     /// Whether this backend supports GBNF grammar-constrained decoding.
     fn supports_grammar(&self) -> bool {
         false
@@ -179,6 +191,11 @@ impl EngineRegistry {
     }
 
     /// Find a specific backend by engine ID.
+    ///
+    /// Note: this can return a stub backend (the `Dummy` backend re-uses the
+    /// `Candle` engine id), which is required for dispatching handles that a test
+    /// loaded from `dummy://`. Use [`EngineRegistry::get_real`] when the backend
+    /// will be asked to load or serve a real model.
     pub fn get(&self, engine: InferenceEngine) -> Option<&dyn InferenceBackend> {
         self.backends
             .iter()
@@ -186,7 +203,19 @@ impl EngineRegistry {
             .map(|b| b.as_ref())
     }
 
-    /// Find the best available backend for a given model format.
+    /// Find a specific backend by engine ID, never returning a stub backend.
+    ///
+    /// This is what engine selection for real inference must use: when no real
+    /// backend with this id is compiled in, it returns `None` and the caller
+    /// reports "no engine available" instead of silently loading a stub.
+    pub fn get_real(&self, engine: InferenceEngine) -> Option<&dyn InferenceBackend> {
+        self.backends
+            .iter()
+            .find(|b| b.engine_id() == engine && b.is_available() && !b.is_stub())
+            .map(|b| b.as_ref())
+    }
+
+    /// Find the best available backend for a given model format, ignoring stubs.
     pub fn find_for_format(&self, format: ModelFormat) -> Option<&dyn InferenceBackend> {
         // Priority order: LlamaCpp > Candle > others
         let priority = [
@@ -200,6 +229,7 @@ impl EngineRegistry {
             if let Some(backend) = self.backends.iter().find(|b| {
                 b.engine_id() == engine
                     && b.is_available()
+                    && !b.is_stub()
                     && b.supported_formats().contains(&format)
             }) {
                 return Some(backend.as_ref());
@@ -255,5 +285,56 @@ mod tests {
         let registry = EngineRegistry::new();
         let backend = registry.find_for_format(ModelFormat::Gguf);
         assert!(backend.is_some(), "Should find a backend for GGUF format");
+    }
+
+    #[test]
+    fn test_find_for_format_never_returns_stub() {
+        let registry = EngineRegistry::new();
+        for format in [ModelFormat::Gguf, ModelFormat::SafeTensors] {
+            if let Some(backend) = registry.find_for_format(format) {
+                assert!(
+                    !backend.is_stub(),
+                    "find_for_format must not return the stub backend ({})",
+                    backend.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_dummy_is_a_stub_and_get_real_skips_it() {
+        let registry = EngineRegistry::new();
+        let dummy = registry
+            .all_backends()
+            .iter()
+            .find(|b| b.name() == "Dummy")
+            .expect("dummy backend is always registered");
+        assert!(
+            dummy.is_stub(),
+            "the Dummy backend must be marked as a stub"
+        );
+        // `get` must keep returning it (dispatch for dummy:// handles in tests) ...
+        assert!(registry.get(InferenceEngine::Candle).is_some());
+        // ... but engine selection must never see it.
+        if !cfg!(any(
+            feature = "candle",
+            feature = "wasm",
+            feature = "llamacpp"
+        )) {
+            assert!(
+                registry.get_real(InferenceEngine::Candle).is_none(),
+                "no real Candle backend is compiled in"
+            );
+        }
+    }
+
+    #[cfg(not(any(feature = "llamacpp", feature = "candle", feature = "wasm")))]
+    #[test]
+    fn test_no_real_backend_means_no_engine_for_gguf() {
+        let registry = EngineRegistry::new();
+        assert!(
+            registry.find_for_format(ModelFormat::Gguf).is_none(),
+            "without a real backend no format should resolve to an engine"
+        );
     }
 }

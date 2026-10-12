@@ -3,12 +3,23 @@ import { getMeshStatus, saveMeshConfig, getMeshConfig, getMeshConnectionStatus, 
 import type { MeshConnectionStatus } from "../lib/invoke";
 import type { MeshStatus as MeshStatusType } from "../types";
 import { Link } from "react-router-dom";
-import { Network, Settings, Power, Shield, Activity, Wifi, WifiOff } from "lucide-react";
+import { Network, Settings, Power, Shield, Activity, Wifi, WifiOff, AlertTriangle } from "lucide-react";
 import { Card, Button, Badge, Surface } from "../components/ui";
+
+/**
+ * `MeshConnectionStatus` from invoke.ts plus the fields the backend now returns
+ * to explain a degraded mesh (kept local until invoke.ts declares them).
+ */
+type MeshConnection = MeshConnectionStatus & {
+  known_peers?: number;
+  registered?: boolean;
+  last_error?: string | null;
+  coordinator_url?: string;
+};
 
 export default function MeshStatus() {
   const [status, setStatus] = useState<MeshStatusType | null>(null);
-  const [connection, setConnection] = useState<MeshConnectionStatus | null>(null);
+  const [connection, setConnection] = useState<MeshConnection | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [joining, setJoining] = useState(false);
@@ -24,11 +35,11 @@ export default function MeshStatus() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Poll connection status every 30s
+  // Poll connection status often enough to show a registration failure quickly.
   useEffect(() => {
     const interval = setInterval(async () => {
       try { setConnection(await getMeshConnectionStatus()); } catch { /* ignore */ }
-    }, 30_000);
+    }, 10_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -139,16 +150,26 @@ export default function MeshStatus() {
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-base font-medium">
-                    {connection.running ? "Connected to Hive" : "Not Connected"}
+                    {!connection.running
+                      ? "Not Started"
+                      : connection.registered
+                        ? "Connected to Hive"
+                        : "LAN-only (coordinator unreachable)"}
                   </span>
                   {connection.running && (
-                    <Badge variant="default">{connection.peer_count} peer{connection.peer_count !== 1 ? "s" : ""}</Badge>
+                    <Badge variant={connection.registered ? "default" : "accent"}>
+                      {connection.peer_count} peer{connection.peer_count !== 1 ? "s" : ""}
+                    </Badge>
                   )}
                 </div>
                 <p className="mt-0.5 text-sm text-text-muted">
-                  {connection.running
-                    ? `Node ${connection.node_id?.slice(0, 12)}… registered and sending heartbeats`
-                    : "Click Join to register with the coordination server."}
+                  {!connection.running
+                    ? "Click Join to start the mesh node."
+                    : connection.registered
+                      ? (connection.peer_count > 0
+                          ? `Node ${connection.node_id?.slice(0, 12)}… registered on ${connection.coordinator_url ?? status.coordination_server} and connected.`
+                          : `Node ${connection.node_id?.slice(0, 12)}… is registered on ${connection.coordinator_url ?? status.coordination_server}. No other node is connected right now — 0 peers is expected while you are the only node online.`)
+                      : `Node ${connection.node_id?.slice(0, 12)}… is running without a coordination-server registration; only LAN peers can be found.`}
                 </p>
               </div>
               <Button
@@ -166,6 +187,9 @@ export default function MeshStatus() {
                         await saveMeshConfig(cfg);
                       }
                       await joinMesh();
+                      // The node starts in the background; give it a moment so
+                      // the status below reflects reality instead of "Not Started".
+                      await new Promise((resolve) => setTimeout(resolve, 1500));
                     }
                     await refresh();
                   } catch (err: any) {
@@ -179,11 +203,37 @@ export default function MeshStatus() {
                 {joining ? "…" : connection.running ? "Leave" : "Join"}
               </Button>
             </div>
+
+            {/* Real, actionable error instead of a silent zero-peer state.
+                A secondary-source warning (e.g. the LAN port is taken) is muted
+                while the node is registered and connected. */}
+            {connection.running && connection.last_error && (
+              <div className={[
+                "mt-4 flex items-start gap-2 rounded-[var(--radius-md)] border p-3",
+                !connection.registered || connection.peer_count === 0
+                  ? "border-danger/30 bg-danger/5"
+                  : "border-border bg-surface-overlay",
+              ].join(" ")}>
+                <AlertTriangle size={14} className={[
+                  "mt-0.5 shrink-0",
+                  !connection.registered || connection.peer_count === 0 ? "text-danger" : "text-text-muted",
+                ].join(" ")} />
+                <p className="text-xs text-text-secondary">
+                  <span className={[
+                    "font-medium",
+                    !connection.registered || connection.peer_count === 0 ? "text-danger" : "text-text-muted",
+                  ].join(" ")}>
+                    {connection.registered && connection.peer_count > 0 ? "Mesh warning: " : "Mesh degraded: "}
+                  </span>
+                  {connection.last_error}
+                </p>
+              </div>
+            )}
           </Card>
         )}
 
         {/* Live Network Karma & Peers Leaderboard */}
-        <NetworkKarmaLeaderboard coordinatorUrl={status.coordination_server} />
+        <NetworkKarmaLeaderboard coordinatorUrl={connection?.coordinator_url ?? status.coordination_server} />
       </div>
     </Surface>
   );
@@ -261,7 +311,9 @@ function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string })
         </div>
       ) : nodes.length === 0 ? (
         <div className="rounded-[var(--radius-md)] bg-surface-overlay p-6 text-center text-xs text-text-muted">
-          No other active nodes detected in the network right now. Be the pack leader!
+          No nodes are registered on <span className="font-mono">{coordinatorUrl}</span> right now.
+          If your own node is not listed either, press Join above — with nobody else online,
+          0 connected peers is the expected result, not a failure.
         </div>
       ) : (
         <div className="overflow-x-auto">

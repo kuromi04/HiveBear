@@ -198,6 +198,7 @@ mod tests {
             quality_score: 0.72,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF".into()),
+            candle_compatible: true,
         };
 
         let meta: ModelMetadata = entry.into();
@@ -218,6 +219,7 @@ mod tests {
             quality_score: 0.5,
             category: ModelCategory::General,
             huggingface_id: None,
+            candle_compatible: true,
         };
 
         let meta: ModelMetadata = entry.into();

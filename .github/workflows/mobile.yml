@@ -73,6 +73,28 @@ jobs:
       - name: Install tauri-cli
         run: which cargo-tauri >/dev/null 2>&1 || cargo install tauri-cli@2.5.0 --locked --force
 
+      # Stamp the APK versionName from the tag instead of the hardcoded 0.2.0.
+      - name: Stamp app version from tag
+        shell: bash
+        env:
+          RAW_TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
+        run: |
+          VERSION="${RAW_TAG#v}"
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "Ref '$RAW_TAG' is not a semver tag — keeping the version from tauri.conf.json"
+            exit 0
+          fi
+          echo "Stamping version $VERSION"
+          export VERSION
+          node -e "
+            const fs = require('fs');
+            for (const p of ['apps/desktop/src-tauri/tauri.conf.json', 'apps/desktop/package.json']) {
+              const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+              j.version = process.env.VERSION;
+              fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+            }
+          "
+
       - name: Build Android APK
         env:
           NDK_HOME: ${{ env.ANDROID_NDK_HOME }}

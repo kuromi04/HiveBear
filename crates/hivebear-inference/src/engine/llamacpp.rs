@@ -554,4 +554,51 @@ mod tests {
             other => panic!("Expected ModelNotFound, got: {other}"),
         }
     }
+
+    /// End-to-end check of the desktop engine on a real local model: load a small
+    /// GGUF through llama.cpp and stream a few tokens.
+    ///
+    /// Runs only when `HIVEBEAR_TEST_GGUF` points at a directory holding a small
+    /// `.gguf` (llama.cpp does not need a sibling tokenizer.json, and nothing is
+    /// downloaded here).
+    #[tokio::test]
+    async fn test_llamacpp_generates_from_real_gguf() {
+        use futures::StreamExt;
+
+        let Ok(dir) = std::env::var("HIVEBEAR_TEST_GGUF") else {
+            return;
+        };
+        let dir = Path::new(&dir);
+        let gguf = std::fs::read_dir(dir)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .find(|p| p.extension().and_then(|e| e.to_str()) == Some("gguf"))
+            .unwrap_or_else(|| panic!("no .gguf file in {}", dir.display()));
+
+        let backend = LlamaCppBackend::new();
+        let handle = backend
+            .load_model(&gguf, &LoadConfig::default())
+            .await
+            .expect("llama.cpp should load the test GGUF");
+
+        let req = GenerateRequest {
+            messages: vec![ChatMessage::user_text("Say hello")],
+            max_tokens: 8,
+            ..Default::default()
+        };
+
+        let mut stream = backend.stream(&handle, &req);
+        let mut text = String::new();
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(tok) => text.push_str(&tok.text),
+                Err(e) => panic!("generation failed: {e}"),
+            }
+        }
+        assert!(
+            !text.trim().is_empty(),
+            "llama.cpp produced an empty stream for a loaded model"
+        );
+    }
 }

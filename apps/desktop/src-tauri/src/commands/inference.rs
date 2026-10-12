@@ -33,6 +33,16 @@ pub async fn load_model(
         .await
         .map_err(|e| format!("Failed to resolve model '{}': {e}", model_path))?;
 
+    // The Candle backend (the only engine compiled into mobile builds) needs a
+    // `tokenizer.json` next to the GGUF. Installs made before HiveBear fetched it
+    // never created that file, which made every mobile load fail. Best effort:
+    // engine selection/loading still reports the real error below if it cannot be
+    // fetched (e.g. offline).
+    let _ = state
+        .registry
+        .ensure_tokenizer(&model_path, &resolved)
+        .await;
+
     let handle = state
         .orchestrator
         .load(&resolved, &load_config)
@@ -88,6 +98,7 @@ pub async fn stream_chat(
         .map_err(|e| String::from(crate::error::CommandError::from(e)))?;
 
     let mut full_text = String::new();
+    let mut stream_error: Option<String> = None;
     while let Some(result) = stream.next().await {
         match result {
             Ok(token) => {
@@ -95,13 +106,39 @@ pub async fn stream_chat(
                 let _ = window.emit("chat-token", &token.text);
             }
             Err(e) => {
-                let _ = window.emit("chat-error", e.to_string());
+                let message = e.to_string();
+                // Still emitted so a partial answer stays visible next to the error.
+                let _ = window.emit("chat-error", &message);
+                stream_error = Some(message);
                 break;
             }
         }
     }
 
     let _ = window.emit("chat-done", ());
+
+    // A stream that ends with no token and no error (immediate EOS, a backend that
+    // produced nothing, a stub engine, ...) used to leave the user staring at an
+    // empty assistant bubble with no explanation: fail the command so the UI always
+    // shows it. The same applies to an error that produced nothing — the event above
+    // can be delivered after the frontend has already unlistened, so the returned
+    // error is the reliable channel.
+    if full_text.trim().is_empty() {
+        return Err(match stream_error {
+            Some(message) => message,
+            None => format!(
+                "The model produced no output (engine: {:?}). Unload and load the model again, \
+                 or install a different model.",
+                info.engine
+            ),
+        });
+    }
+
+    if let Some(message) = stream_error {
+        // The answer is incomplete but non-empty; the `chat-error` event carries the reason.
+        tracing::warn!("chat stream ended early for handle {handle_id}: {message}");
+    }
+
     Ok(full_text)
 }
 

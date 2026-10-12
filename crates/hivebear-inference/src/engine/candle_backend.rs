@@ -120,14 +120,39 @@ impl InferenceBackend for CandleBackend {
                     InferenceError::LoadError(format!("Failed to load tokenizer: {e}"))
                 })?
             } else {
+                // Candle needs a HuggingFace `tokenizer.json` next to the GGUF. This is
+                // the only engine available on Android/iOS, so a missing file here means
+                // the model cannot answer at all — say so explicitly instead of failing
+                // later with an empty stream.
                 return Err(InferenceError::LoadError(format!(
-                    "tokenizer.json not found in {}. Place the HuggingFace tokenizer.json \
-                     alongside the GGUF file.",
+                    "tokenizer.json is missing from {}. The Candle backend (used on mobile \
+                     and as the pure-Rust fallback) cannot read a GGUF without it. \
+                     Reload this model so HiveBear can fetch the tokenizer, or place the \
+                     HuggingFace tokenizer.json next to the .gguf file.",
                     model_dir.display()
                 )));
             };
 
             let handle = ModelHandle::new(path.clone(), InferenceEngine::Candle);
+
+            // candle 0.8's `quantized_llama` reads `llama.*` metadata keys only, so a
+            // GGUF converted from another architecture (qwen2/qwen3/gemma/phi3/...) can
+            // never load through it. Mobile builds ship Candle as their only engine, so
+            // name the architecture instead of surfacing an opaque metadata error.
+            if !content.metadata.contains_key("llama.attention.head_count") {
+                let arch = content
+                    .metadata
+                    .get("general.architecture")
+                    .and_then(|v| v.to_string().ok())
+                    .cloned()
+                    .unwrap_or_else(|| "unknown".to_string());
+                return Err(InferenceError::LoadError(format!(
+                    "This model uses the '{arch}' architecture, but the Candle backend can only \
+                     run llama-architecture GGUF models (it reads llama.* metadata). Install a \
+                     Llama/Mistral/TinyLlama GGUF for on-device inference, or use a desktop \
+                     build, which also ships llama.cpp and supports qwen2/qwen3/gemma/phi models."
+                )));
+            }
 
             // Pipeline-parallel load path: load only the assigned layer range
             if let Some(stage) = pipeline_stage {
@@ -813,5 +838,75 @@ mod tests {
             let val = rand_f32();
             assert!((0.0..1.0).contains(&val), "rand_f32 out of range: {val}");
         }
+    }
+
+    fn gguf_file_in(dir: &Path) -> std::path::PathBuf {
+        std::fs::read_dir(dir)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .find(|p| p.extension().and_then(|e| e.to_str()) == Some("gguf"))
+            .unwrap_or_else(|| panic!("no .gguf file in {}", dir.display()))
+    }
+
+    /// Reproduces the Android failure path: a GGUF installed without its
+    /// HuggingFace `tokenizer.json` must fail to load with an actionable message
+    /// (instead of loading "successfully" and answering with nothing later).
+    ///
+    /// Runs only when `HIVEBEAR_TEST_GGUF_NO_TOKENIZER` points at a directory that
+    /// holds a real `.gguf` and no `tokenizer.json`.
+    #[tokio::test]
+    async fn test_gguf_without_tokenizer_fails_with_actionable_error() {
+        let Ok(dir) = std::env::var("HIVEBEAR_TEST_GGUF_NO_TOKENIZER") else {
+            return;
+        };
+        let dir = Path::new(&dir);
+        assert!(
+            !dir.join("tokenizer.json").exists(),
+            "HIVEBEAR_TEST_GGUF_NO_TOKENIZER must point at a dir without tokenizer.json"
+        );
+        let gguf = gguf_file_in(dir);
+
+        let backend = CandleBackend::new();
+        let err = backend
+            .load_model(&gguf, &LoadConfig::default())
+            .await
+            .expect_err("Candle must refuse a GGUF without tokenizer.json");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("tokenizer.json"),
+            "error must name the missing file, got: {msg}"
+        );
+    }
+
+    /// Loudly reports the architecture limitation that breaks on-device inference:
+    /// candle 0.8's `quantized_llama` only reads `llama.*` metadata, so a qwen2 /
+    /// qwen3 / gemma / phi3 GGUF cannot be served by the Candle backend at all.
+    ///
+    /// Runs only when `HIVEBEAR_TEST_GGUF` points at a directory holding a
+    /// non-llama-architecture `.gguf` plus a `tokenizer.json` (the tokenizer must be
+    /// present so the architecture check is what fails).
+    #[tokio::test]
+    async fn test_unsupported_architecture_is_reported_clearly() {
+        let Ok(dir) = std::env::var("HIVEBEAR_TEST_GGUF") else {
+            return;
+        };
+        let dir = Path::new(&dir);
+        assert!(
+            dir.join("tokenizer.json").exists(),
+            "HIVEBEAR_TEST_GGUF must point at a dir containing tokenizer.json"
+        );
+        let gguf = gguf_file_in(dir);
+
+        let backend = CandleBackend::new();
+        let err = backend
+            .load_model(&gguf, &LoadConfig::default())
+            .await
+            .expect_err("Candle cannot load a non-llama-architecture GGUF");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("architecture") && msg.contains("Candle"),
+            "error must explain the architecture limitation, got: {msg}"
+        );
     }
 }

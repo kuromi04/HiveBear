@@ -20,6 +20,17 @@ pub struct ModelEntry {
     pub category: ModelCategory,
     /// HuggingFace model ID for GGUF downloads
     pub huggingface_id: Option<String>,
+    /// Whether this model can run locally on Android via the Candle backend.
+    ///
+    /// Candle's `quantized_llama` module only supports the **llama** GGUF
+    /// architecture.  Models with other architectures (qwen2, mistral-moe,
+    /// phi3, gemma, starcoder, deepseek-moe …) will fail at load time with
+    /// "cannot find llama.attention.head_count in metadata".
+    ///
+    /// On Android the only available engine is Candle (no llama.cpp NDK
+    /// build), so any entry with `candle_compatible = false` should be
+    /// hidden from the local-download flow and offered only via Mesh.
+    pub candle_compatible: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -48,7 +59,8 @@ impl std::fmt::Display for ModelCategory {
 /// Built-in database of popular open-source models.
 pub fn builtin_models() -> Vec<ModelEntry> {
     vec![
-        // Llama 3.x family
+        // ── Llama 3.x ─────────────────────────────────────────────────────────
+        // Architecture: llama → candle_compatible = true
         ModelEntry {
             id: "llama-3.2-1b".into(),
             name: "Llama 3.2 1B".into(),
@@ -58,6 +70,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.45,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/Llama-3.2-1B-Instruct-GGUF".into()),
+            candle_compatible: true,
         },
         ModelEntry {
             id: "llama-3.2-3b".into(),
@@ -68,6 +81,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.58,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/Llama-3.2-3B-Instruct-GGUF".into()),
+            candle_compatible: true,
         },
         ModelEntry {
             id: "llama-3.1-8b".into(),
@@ -82,6 +96,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.72,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF".into()),
+            candle_compatible: true,
         },
         ModelEntry {
             id: "llama-3.1-70b".into(),
@@ -96,8 +111,10 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.90,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/Meta-Llama-3.1-70B-Instruct-GGUF".into()),
+            candle_compatible: true,
         },
-        // Qwen 2.5
+        // ── Qwen 2.5 ──────────────────────────────────────────────────────────
+        // Architecture: qwen2 → candle_compatible = false (Mesh-only on Android)
         ModelEntry {
             id: "qwen-2.5-0.5b".into(),
             name: "Qwen 2.5 0.5B".into(),
@@ -107,6 +124,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.35,
             category: ModelCategory::General,
             huggingface_id: Some("Qwen/Qwen2.5-0.5B-Instruct-GGUF".into()),
+            candle_compatible: false,
         },
         ModelEntry {
             id: "qwen-2.5-1.5b".into(),
@@ -117,6 +135,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.50,
             category: ModelCategory::General,
             huggingface_id: Some("Qwen/Qwen2.5-1.5B-Instruct-GGUF".into()),
+            candle_compatible: false,
         },
         ModelEntry {
             id: "qwen-2.5-7b".into(),
@@ -127,6 +146,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.70,
             category: ModelCategory::General,
             huggingface_id: Some("Qwen/Qwen2.5-7B-Instruct-GGUF".into()),
+            candle_compatible: false,
         },
         ModelEntry {
             id: "qwen-2.5-32b".into(),
@@ -137,6 +157,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.85,
             category: ModelCategory::General,
             huggingface_id: Some("Qwen/Qwen2.5-32B-Instruct-GGUF".into()),
+            candle_compatible: false,
         },
         ModelEntry {
             id: "qwen-2.5-72b".into(),
@@ -147,8 +168,10 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.91,
             category: ModelCategory::General,
             huggingface_id: Some("Qwen/Qwen2.5-72B-Instruct-GGUF".into()),
+            candle_compatible: false,
         },
-        // Qwen 2.5 Coder
+        // ── Qwen 2.5 Coder ────────────────────────────────────────────────────
+        // Architecture: qwen2 → candle_compatible = false
         ModelEntry {
             id: "qwen-2.5-coder-7b".into(),
             name: "Qwen 2.5 Coder 7B".into(),
@@ -158,6 +181,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.73,
             category: ModelCategory::Code,
             huggingface_id: Some("Qwen/Qwen2.5-Coder-7B-Instruct-GGUF".into()),
+            candle_compatible: false,
         },
         ModelEntry {
             id: "qwen-2.5-coder-32b".into(),
@@ -168,8 +192,12 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.88,
             category: ModelCategory::Code,
             huggingface_id: Some("Qwen/Qwen2.5-Coder-32B-Instruct-GGUF".into()),
+            candle_compatible: false,
         },
-        // Mistral / Mixtral
+        // ── Mistral / Mixtral ─────────────────────────────────────────────────
+        // Mistral 7B v0.3: architecture "mistral" (close to llama, same layout).
+        // candle quantized_llama covers "mistral" as well → compatible.
+        // Mixtral is a MoE variant; candle does NOT implement MoE routing → false.
         ModelEntry {
             id: "mistral-7b-v0.3".into(),
             name: "Mistral 7B v0.3".into(),
@@ -179,6 +207,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.68,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/Mistral-7B-Instruct-v0.3-GGUF".into()),
+            candle_compatible: true,
         },
         ModelEntry {
             id: "mixtral-8x7b".into(),
@@ -189,8 +218,10 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.82,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/Mixtral-8x7B-Instruct-v0.1-GGUF".into()),
+            candle_compatible: false,
         },
-        // Phi-3
+        // ── Phi-3 ─────────────────────────────────────────────────────────────
+        // Architecture: phi3 → candle does not have a quantized phi3 impl → false.
         ModelEntry {
             id: "phi-3-mini-3.8b".into(),
             name: "Phi-3 Mini 3.8B".into(),
@@ -204,6 +235,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.62,
             category: ModelCategory::Instruction,
             huggingface_id: Some("bartowski/Phi-3-mini-128k-instruct-GGUF".into()),
+            candle_compatible: false,
         },
         ModelEntry {
             id: "phi-3-medium-14b".into(),
@@ -218,8 +250,10 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.78,
             category: ModelCategory::Instruction,
             huggingface_id: Some("bartowski/Phi-3-medium-128k-instruct-GGUF".into()),
+            candle_compatible: false,
         },
-        // Gemma 2
+        // ── Gemma 2 ───────────────────────────────────────────────────────────
+        // Architecture: gemma2 → candle quantized_llama does not cover gemma2 → false.
         ModelEntry {
             id: "gemma-2-2b".into(),
             name: "Gemma 2 2B".into(),
@@ -229,6 +263,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.52,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/gemma-2-2b-it-GGUF".into()),
+            candle_compatible: false,
         },
         ModelEntry {
             id: "gemma-2-9b".into(),
@@ -239,6 +274,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.74,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/gemma-2-9b-it-GGUF".into()),
+            candle_compatible: false,
         },
         ModelEntry {
             id: "gemma-2-27b".into(),
@@ -249,8 +285,10 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.83,
             category: ModelCategory::General,
             huggingface_id: Some("bartowski/gemma-2-27b-it-GGUF".into()),
+            candle_compatible: false,
         },
-        // DeepSeek Coder
+        // ── DeepSeek Coder ────────────────────────────────────────────────────
+        // Architecture: deepseek2 (MoE) → candle does not implement it → false.
         ModelEntry {
             id: "deepseek-coder-v2-lite".into(),
             name: "DeepSeek Coder V2 Lite 16B".into(),
@@ -260,8 +298,10 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.76,
             category: ModelCategory::Code,
             huggingface_id: Some("bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF".into()),
+            candle_compatible: false,
         },
-        // StarCoder2
+        // ── StarCoder2 ────────────────────────────────────────────────────────
+        // Architecture: starcoder2 → not in candle quantized_llama → false.
         ModelEntry {
             id: "starcoder2-3b".into(),
             name: "StarCoder2 3B".into(),
@@ -271,6 +311,7 @@ pub fn builtin_models() -> Vec<ModelEntry> {
             quality_score: 0.55,
             category: ModelCategory::Code,
             huggingface_id: Some("bartowski/starcoder2-3b-GGUF".into()),
+            candle_compatible: false,
         },
     ]
 }

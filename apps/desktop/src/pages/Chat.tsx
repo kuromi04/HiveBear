@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useChat, useLoadedModels, useModelLoader } from "../hooks/useInference";
 import { useInstalledModels } from "../hooks/useRegistry";
 import { useConversations } from "../hooks/useConversations";
@@ -11,6 +12,7 @@ import { PanelLeft, Plus, Loader, Sparkles } from "lucide-react";
 import { EmptyState } from "../components/ui";
 
 export default function Chat() {
+  const navigate = useNavigate();
   const { models: loaded, refresh: refreshLoaded } = useLoadedModels();
   const { models: installed } = useInstalledModels();
   const { loading: modelLoading, error: loadError, load } = useModelLoader();
@@ -223,10 +225,18 @@ export default function Chat() {
             <EmptyState
               icon={<Sparkles size={24} />}
               title="No model loaded"
-              description="Load an installed model to start chatting."
+              description={
+                installed.length > 0
+                  ? "Load one of your installed models to start chatting."
+                  : "No models are installed yet. Download a GGUF model from the Model Browser to start chatting."
+              }
+              action={{
+                label: installed.length > 0 ? "Install another model" : "Open Model Browser",
+                onClick: () => navigate("/models"),
+              }}
             >
               {installed.length > 0 ? (
-                <div className="mt-2 flex flex-wrap justify-center gap-2">
+                <div className="flex flex-wrap justify-center gap-2">
                   {installed.slice(0, 4).map((m) => (
                     <button
                       key={m.id}
@@ -239,12 +249,11 @@ export default function Chat() {
                     </button>
                   ))}
                 </div>
-              ) : (
-                <p className="mt-1 text-xs text-text-muted">
-                  Install a model from the Model Browser first.
-                </p>
+              ) : null}
+              {modelLoading && (
+                <p className="text-xs text-text-muted">Loading model… this can take a minute.</p>
               )}
-              {loadError && <p className="mt-2 text-xs text-danger">{loadError}</p>}
+              {loadError && <p className="text-xs text-danger">{loadError}</p>}
             </EmptyState>
           </div>
         ) : messages.length === 0 ? (

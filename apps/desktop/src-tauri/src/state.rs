@@ -74,6 +74,10 @@ impl AppState {
         let tier;
         let coordination_server;
         let port;
+        let lan_discovery;
+        let stun_servers;
+        let relay_servers;
+        let relay_enabled;
         {
             let mut config = self.config.lock().unwrap_or_else(|e| e.into_inner());
             if !config.mesh.enabled {
@@ -81,8 +85,14 @@ impl AppState {
                 let _ = config.save();
             }
             tier = hivebear_mesh::MeshTier::from_str_lossy(&config.mesh.tier);
-            coordination_server = config.mesh.coordination_server.clone();
+            // Normalized on load; normalize again so a value edited in Settings
+            // and saved by an older build cannot reach the HTTP client raw.
+            coordination_server = config.mesh.normalized_coordination_server();
             port = config.mesh.port;
+            lan_discovery = config.mesh.mdns_enabled;
+            stun_servers = config.mesh.stun_servers.clone();
+            relay_servers = config.mesh.relay_servers.clone();
+            relay_enabled = config.mesh.relay_enabled;
         }
 
         let identity_path = self.paths.data_dir.join("node_identity.key");
@@ -96,18 +106,34 @@ impl AppState {
                 security_mode,
                 None,
             ));
-        let discovery: Arc<dyn hivebear_mesh::discovery::PeerDiscovery> = Arc::new(
+
+        // Primary source: the coordination server.
+        let primary = Arc::new(
             hivebear_mesh::discovery::server::CoordinationServerClient::new(coordination_server),
         );
+        let mut discovery = hivebear_mesh::discovery::composite::CompositeDiscovery::new(primary);
+
+        // LAN fallback: two nodes on the same network find each other over UDP
+        // broadcast even when no coordination server is reachable.
+        if lan_discovery {
+            discovery.add_source(Arc::new(hivebear_mesh::discovery::lan::LanDiscovery::new(
+                hivebear_mesh::discovery::LAN_DISCOVERY_PORT,
+            )));
+        }
+        let discovery: Arc<dyn hivebear_mesh::discovery::PeerDiscovery> = Arc::new(discovery);
 
         let reputation_path = Some(self.paths.data_dir.join("reputation.json"));
-        let node = Arc::new(MeshNode::with_identity(
-            identity,
-            transport,
-            discovery,
-            tier,
-            reputation_path,
-        ));
+        let mut node =
+            MeshNode::with_identity(identity, transport, discovery, tier, reputation_path);
+        // Apply the configured NAT/relay settings: these fields were dead config
+        // and the node used hardcoded values (including an unresolvable relay).
+        node.stun_servers = stun_servers;
+        node.relay_servers = if relay_enabled {
+            relay_servers
+        } else {
+            Vec::new()
+        };
+        let node = Arc::new(node);
 
         let listen_addr: std::net::SocketAddr = format!("0.0.0.0:{}", port)
             .parse()

@@ -74,7 +74,7 @@ pub fn select_engine<'a>(
     };
 
     for engine_id in &priority {
-        if let Some(backend) = registry.get(*engine_id) {
+        if let Some(backend) = registry.get_real(*engine_id) {
             if backend.supported_formats().contains(&format) {
                 tracing::info!(
                     engine = backend.name(),
@@ -87,13 +87,13 @@ pub fn select_engine<'a>(
         }
     }
 
-    // Last resort: find any backend that supports this format
+    // Last resort: find any real backend that supports this format
     if let Some(backend) = registry.find_for_format(format) {
         return Ok(backend);
     }
 
     // Final fallback: mesh distributed inference (if registered and available)
-    if let Some(mesh) = registry.get(InferenceEngine::Mesh) {
+    if let Some(mesh) = registry.get_real(InferenceEngine::Mesh) {
         if mesh.supported_formats().contains(&format) {
             tracing::info!(
                 format = %format,
@@ -103,6 +103,15 @@ pub fn select_engine<'a>(
         }
     }
 
+    tracing::error!(
+        format = %format,
+        compiled = ?registry
+            .all_backends()
+            .iter()
+            .map(|b| (b.name(), b.is_available(), b.is_stub()))
+            .collect::<Vec<_>>(),
+        "No real inference engine is available for this model format"
+    );
     Err(InferenceError::NoEngineAvailable {
         format: format.to_string(),
     })
@@ -204,5 +213,35 @@ mod tests {
         // MLX format is not supported by any compiled-in backend
         let result = select_engine(&registry, ModelFormat::Mlx, &profile);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_select_engine_never_returns_stub() {
+        // The Dummy backend claims to support GGUF with the Candle engine id; the
+        // selector must either return a real engine or fail, never the stub.
+        let registry = EngineRegistry::new();
+        for arch in ["x86_64", "aarch64"] {
+            let profile = test_profile("android", arch, false);
+            match select_engine(&registry, ModelFormat::Gguf, &profile) {
+                Ok(backend) => assert!(
+                    !backend.is_stub(),
+                    "selector returned the stub backend '{}' instead of failing",
+                    backend.name()
+                ),
+                Err(e) => {
+                    // Only acceptable when no real GGUF backend is compiled in.
+                    // A `cfg!` inside `assert!` would be a constant condition
+                    // (`clippy::assertions_on_constants`), so branch at compile time.
+                    #[cfg(any(feature = "candle", feature = "llamacpp"))]
+                    {
+                        panic!("a real GGUF backend is compiled in but selection failed: {e}");
+                    }
+                    #[cfg(not(any(feature = "candle", feature = "llamacpp")))]
+                    {
+                        let _ = e;
+                    }
+                }
+            }
+        }
     }
 }

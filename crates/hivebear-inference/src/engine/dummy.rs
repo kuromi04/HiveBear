@@ -15,7 +15,9 @@ pub struct DummyBackend;
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl InferenceBackend for DummyBackend {
     fn engine_id(&self) -> InferenceEngine {
-        // Re-use Candle as the "identity" since there's no Dummy variant in the enum
+        // Re-use Candle as the "identity" since there's no Dummy variant in the enum.
+        // Combined with `is_stub()` this is safe: engine selection uses
+        // `EngineRegistry::get_real`/`find_for_format`, which skip stub backends.
         InferenceEngine::Candle
     }
 
@@ -29,6 +31,13 @@ impl InferenceBackend for DummyBackend {
 
     fn is_available(&self) -> bool {
         // Dummy is always available but should rank last in selection
+        true
+    }
+
+    fn is_stub(&self) -> bool {
+        // Never select this backend for a real model: it answers with canned text
+        // regardless of the model file, so a silent fallback to it would look like
+        // the model "responding" with nonsense instead of a visible engine error.
         true
     }
 

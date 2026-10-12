@@ -1,6 +1,9 @@
 pub mod composite;
+pub mod lan;
 pub mod pex;
 pub mod server;
+
+pub use lan::{LanDiscovery, LAN_DISCOVERY_PORT};
 
 use async_trait::async_trait;
 
@@ -24,6 +27,14 @@ pub trait PeerDiscovery: Send + Sync {
 
     /// Deregister this node from the discovery service.
     async fn deregister(&self) -> Result<()>;
+
+    /// Most recent user-actionable failure from this source, if any.
+    ///
+    /// Used to explain a zero-peer state in the UI instead of failing silently.
+    /// Sources that do not track failures keep the default `None`.
+    fn last_error(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Mock discovery for testing: holds peers in memory.

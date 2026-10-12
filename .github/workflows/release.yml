@@ -171,6 +171,31 @@ jobs:
         shell: bash
         run: which cargo-tauri >/dev/null 2>&1 || cargo install tauri-cli@2.5.0 --locked --force
 
+      # The app version was hardcoded to 0.2.0 in tauri.conf.json, so every
+      # installer shipped as HiveBear_0.2.0_* and the in-app updater always
+      # compared against a stale version. Stamp the version from the git tag.
+      - name: Stamp app version from tag
+        shell: bash
+        env:
+          RAW_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${RAW_TAG#v}"
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "Ref '$RAW_TAG' is not a semver tag — keeping the version from tauri.conf.json"
+            exit 0
+          fi
+          echo "Stamping version $VERSION"
+          export VERSION
+          node -e "
+            const fs = require('fs');
+            for (const p of ['apps/desktop/src-tauri/tauri.conf.json', 'apps/desktop/package.json']) {
+              const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+              j.version = process.env.VERSION;
+              fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+            }
+          "
+          grep -n '"version"' apps/desktop/src-tauri/tauri.conf.json
+
       - name: Build Tauri app (default features)
         if: matrix.tauri_features == ''
         env:
@@ -541,6 +566,17 @@ jobs:
           json.dump(manifest, open('release/latest.json', 'w'), indent=2)
           print(json.dumps(manifest, indent=2))
           "
+
+          # An empty "platforms" map silently disables the in-app updater for every
+          # user. That happens when no *.sig files were produced, i.e. when the
+          # TAURI_SIGNING_PRIVATE_KEY secret is not configured.
+          PLATFORM_COUNT=$(python3 -c "import json;print(len(json.load(open('release/latest.json'))['platforms']))")
+          if [ "$PLATFORM_COUNT" = "0" ]; then
+            echo "::warning::latest.json has no platforms — in-app updates will be disabled for all users."
+            echo '### ⚠️ Updater manifest has an empty platforms map' >> "$GITHUB_STEP_SUMMARY"
+            echo 'No `.sig` assets were produced, so `latest.json` cannot offer any update.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Set the `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repository secrets to enable in-app updates.' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload desktop assets to release
         env:

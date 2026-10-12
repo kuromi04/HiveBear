@@ -418,6 +418,7 @@ mod tests {
             quality_score: 0.7,
             category: crate::recommender::model_db::ModelCategory::General,
             huggingface_id: None,
+            candle_compatible: true,
         };
 
         let mem_q4 = estimate_memory(&model, Quantization::Q4KM, 4096);

@@ -25,7 +25,7 @@ impl CompositeDiscovery {
         }
     }
 
-    /// Add an additional discovery source (e.g., PEX, mDNS).
+    /// Add an additional discovery source (e.g., PEX, mDNS, LAN broadcast).
     pub fn add_source(&mut self, source: Arc<dyn PeerDiscovery>) {
         self.sources.push(source);
     }
@@ -39,24 +39,47 @@ impl CompositeDiscovery {
 #[async_trait]
 impl PeerDiscovery for CompositeDiscovery {
     async fn register(&self, info: &PeerInfo) -> Result<()> {
-        // Register with primary (coordination server) — propagate errors
-        self.primary.register(info).await?;
-
-        // Also register with other sources (e.g., PEX adds to local cache)
+        // Every source gets a chance to register: LAN discovery must record our
+        // record even when the coordination server is unreachable. The overall
+        // call succeeds when at least one source accepted us.
+        let mut last_error = None;
+        let mut any_ok = false;
         for source in &self.sources {
-            let _ = source.register(info).await;
+            match source.register(info).await {
+                Ok(()) => any_ok = true,
+                Err(e) => {
+                    debug!("Discovery source registration failed: {e}");
+                    last_error = Some(e);
+                }
+            }
         }
 
-        Ok(())
+        match (any_ok, last_error) {
+            (true, _) => Ok(()),
+            (false, Some(e)) => Err(e),
+            (false, None) => Ok(()),
+        }
     }
 
     async fn find_peers(&self, model_id: &str, min_memory_bytes: u64) -> Result<Vec<PeerInfo>> {
+        // Query all sources concurrently: a dead coordination server must not
+        // delay LAN results by a full request timeout.
+        let results = futures::future::join_all(
+            self.sources
+                .iter()
+                .map(|source| source.find_peers(model_id, min_memory_bytes)),
+        )
+        .await;
+
         let mut all_peers = Vec::new();
         let mut seen_ids = HashSet::new();
+        let mut errors = Vec::new();
+        let mut any_ok = false;
 
-        for source in &self.sources {
-            match source.find_peers(model_id, min_memory_bytes).await {
+        for result in results {
+            match result {
                 Ok(peers) => {
+                    any_ok = true;
                     for peer in peers {
                         let key = peer.node_id.to_hex();
                         if seen_ids.insert(key) {
@@ -66,10 +89,15 @@ impl PeerDiscovery for CompositeDiscovery {
                 }
                 Err(e) => {
                     debug!("Discovery source failed (non-fatal): {e}");
+                    errors.push(e);
                 }
             }
         }
 
+        // Fail only when every source failed; report the first reason.
+        if !any_ok && !errors.is_empty() {
+            return Err(errors.remove(0));
+        }
         Ok(all_peers)
     }
 
@@ -84,6 +112,20 @@ impl PeerDiscovery for CompositeDiscovery {
             let _ = source.deregister().await;
         }
         Ok(())
+    }
+
+    fn last_error(&self) -> Option<String> {
+        // Getter: must stay side-effect free (the UI polls it every few seconds).
+        let errors: Vec<String> = self
+            .sources
+            .iter()
+            .filter_map(|source| source.last_error())
+            .collect();
+        if errors.is_empty() {
+            None
+        } else {
+            Some(errors.join("; "))
+        }
     }
 }
 

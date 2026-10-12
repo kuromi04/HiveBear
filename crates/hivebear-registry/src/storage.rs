@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::registry::local::LocalIndex;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -21,7 +21,62 @@ pub struct PartialDownloadInfo {
     pub model_id: String,
     pub filename: String,
     pub bytes_downloaded: u64,
+    /// Full file size when the interrupted download learned it, so the UI can show
+    /// how much of a stuck download is already on disk before offering "Resume".
+    pub total_bytes: Option<u64>,
     pub path: PathBuf,
+}
+
+/// Total size recorded in the `.partial.meta` sitting next to a partial file.
+async fn partial_total_bytes(partial_path: &Path) -> Option<u64> {
+    let name = partial_path.file_name()?.to_string_lossy().to_string();
+    let meta_path = partial_path.with_file_name(format!("{name}.meta"));
+    let contents = tokio::fs::read_to_string(meta_path).await.ok()?;
+    let meta: crate::download::PartialMeta = serde_json::from_str(&contents).ok()?;
+    meta.total_bytes
+}
+
+/// Every `<file>.partial` below `dir`, including nested quantization folders.
+async fn find_partial_files(dir: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut stack = vec![(dir.to_path_buf(), 0u8)];
+
+    while let Some((dir, depth)) = stack.pop() {
+        let Ok(mut entries) = tokio::fs::read_dir(&dir).await else {
+            continue;
+        };
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let Ok(file_type) = entry.file_type().await else {
+                continue;
+            };
+            let name = entry.file_name().to_string_lossy().to_string();
+            if file_type.is_dir() {
+                if depth < 3 && !name.starts_with('.') {
+                    stack.push((entry.path(), depth + 1));
+                }
+            } else if file_type.is_file() && name.ends_with(".partial") {
+                found.push(entry.path());
+            }
+        }
+    }
+
+    found.sort();
+    found
+}
+
+/// Model ID owning `file`: the first path component below `models_dir`, which is
+/// the ID `install`/`resume` expects even for files in a nested subfolder.
+fn model_id_for(models_dir: &Path, file: &Path) -> String {
+    file.strip_prefix(models_dir)
+        .ok()
+        .and_then(|relative| relative.components().next())
+        .map(|component| component.as_os_str().to_string_lossy().to_string())
+        .unwrap_or_else(|| {
+            file.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        })
 }
 
 /// Overall storage report.
@@ -80,33 +135,30 @@ impl StorageManager {
                     if path.is_dir() {
                         let is_tracked = tracked_dirs.iter().any(|t| t == &path);
                         if !is_tracked {
-                            // Check for partial downloads
-                            let mut has_partial = false;
-                            if let Ok(mut sub) = tokio::fs::read_dir(&path).await {
-                                while let Ok(Some(sub_entry)) = sub.next_entry().await {
-                                    let name = sub_entry.file_name().to_string_lossy().to_string();
-                                    if name.ends_with(".partial") {
-                                        has_partial = true;
-                                        let size = sub_entry
-                                            .metadata()
-                                            .await
-                                            .map(|m| m.len())
-                                            .unwrap_or(0);
-                                        partial_downloads.push(PartialDownloadInfo {
-                                            model_id: path
-                                                .file_name()
-                                                .unwrap_or_default()
-                                                .to_string_lossy()
-                                                .to_string(),
-                                            filename: name,
-                                            bytes_downloaded: size,
-                                            path: sub_entry.path(),
-                                        });
-                                    }
-                                }
-                            }
-                            if !has_partial {
+                            // Partial downloads can live in a subfolder (HF repos with
+                            // `UD-Q6_K_XL/…` quantizations), so walk the whole directory.
+                            let partials = find_partial_files(&path).await;
+                            if partials.is_empty() {
                                 orphaned_files.push(path);
+                                continue;
+                            }
+                            for partial in partials {
+                                let size = tokio::fs::metadata(&partial)
+                                    .await
+                                    .map(|m| m.len())
+                                    .unwrap_or(0);
+                                let total_bytes = partial_total_bytes(&partial).await;
+                                partial_downloads.push(PartialDownloadInfo {
+                                    model_id: model_id_for(&self.models_dir, &partial),
+                                    filename: partial
+                                        .file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .to_string(),
+                                    bytes_downloaded: size,
+                                    total_bytes,
+                                    path: partial,
+                                });
                             }
                         }
                     }

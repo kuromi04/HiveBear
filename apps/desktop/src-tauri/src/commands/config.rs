@@ -14,6 +14,11 @@ pub fn get_config(state: State<'_, AppState>) -> CmdResult<Config> {
 
 #[tauri::command]
 pub fn save_config(state: State<'_, AppState>, new_config: Config) -> CmdResult<()> {
+    let mut new_config = new_config;
+    // Heal user-editable fields (currently the coordination-server URL) before
+    // they are validated and written, so a value typed in Settings cannot be
+    // persisted in a form that breaks discovery (`//register` -> 404).
+    new_config.normalize();
     validate_config(&new_config)?;
     if let Some(token) = new_config.cloud.api_keys.get("huggingface") {
         if !token.is_empty() {

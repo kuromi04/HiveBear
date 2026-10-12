@@ -9,11 +9,20 @@ pub async fn search_models(
     query: String,
     limit: Option<usize>,
 ) -> CmdResult<Vec<SearchResult>> {
-    state
+    let mut results = state
         .registry
         .search(&query, limit.unwrap_or(20), Some(&state.profile))
         .await
-        .map_err(|e| crate::error::CommandError::from(e).into())
+        .map_err(crate::error::CommandError::from)?;
+
+    // On mobile (where only Candle is available), filter out incompatible architectures
+    // when browsing (empty query), so mobile users only see models they can actually run.
+    let is_mobile = cfg!(target_os = "android") || state.profile.platform.os == "android";
+    if is_mobile && query.trim().is_empty() {
+        results.retain(|r| r.compatibility_score.unwrap_or(0.0) > 0.0);
+    }
+
+    Ok(results)
 }
 
 #[tauri::command]
@@ -23,6 +32,23 @@ pub async fn install_model(
     model_id: String,
     quant: Option<String>,
 ) -> CmdResult<hivebear_registry::InstalledInfo> {
+    let is_mobile = cfg!(target_os = "android") || state.profile.platform.os == "android";
+    if is_mobile {
+        let builtins = hivebear_core::recommender::model_db::builtin_models();
+        if let Some(entry) = builtins.iter().find(|e| e.id == model_id) {
+            if !entry.candle_compatible {
+                return Err(crate::error::CommandError {
+                    message: format!(
+                        "Model '{}' cannot run locally on mobile (Candle engine only supports Llama/Mistral architectures). \
+                         Please install a Llama model (e.g. Llama 3.2 1B or 3B), or use Mesh to run this model from your PC.",
+                        entry.name
+                    ),
+                    code: crate::error::ErrorCode::RegistryError,
+                }.into());
+            }
+        }
+    }
+
     use tauri::Emitter;
     let progress_cb = move |p: hivebear_registry::download::DownloadProgress| {
         let _ = window.emit("download-progress", &p);

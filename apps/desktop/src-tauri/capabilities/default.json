@@ -9,7 +9,7 @@
       "identifier": "shell:allow-open",
       "allow": [
         { "url": "https://hivebear.com/*" },
-        { "url": "https://github.com/BeckhamLabsLLC/*" }
+        { "url": "https://github.com/kuromi04/*" }
       ]
     }
   ]

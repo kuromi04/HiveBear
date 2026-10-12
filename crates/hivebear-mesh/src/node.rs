@@ -33,6 +33,12 @@ pub struct MeshNode {
     pub stun_servers: Vec<String>,
     /// Relay servers for symmetric NAT fallback.
     pub relay_servers: Vec<String>,
+    /// True once the coordination server accepted this node's registration.
+    registered: std::sync::atomic::AtomicBool,
+    /// Our own advertised record, kept so registration can be retried.
+    local_info: std::sync::Mutex<Option<PeerInfo>>,
+    /// Failure that prevented the node from starting (transport/listen).
+    start_error: std::sync::Mutex<Option<String>>,
     running: std::sync::atomic::AtomicBool,
     shutdown: Arc<Notify>,
 }
@@ -56,6 +62,9 @@ impl MeshNode {
             external_addr: tokio::sync::RwLock::new(None),
             stun_servers: vec!["stun.l.google.com:19302".into()],
             relay_servers: vec!["relay.hivebear.com:3478".into()],
+            registered: std::sync::atomic::AtomicBool::new(false),
+            local_info: std::sync::Mutex::new(None),
+            start_error: std::sync::Mutex::new(None),
             running: std::sync::atomic::AtomicBool::new(false),
             shutdown: Arc::new(Notify::new()),
         }
@@ -80,6 +89,9 @@ impl MeshNode {
             external_addr: tokio::sync::RwLock::new(None),
             stun_servers: vec!["stun.l.google.com:19302".into()],
             relay_servers: vec!["relay.hivebear.com:3478".into()],
+            registered: std::sync::atomic::AtomicBool::new(false),
+            local_info: std::sync::Mutex::new(None),
+            start_error: std::sync::Mutex::new(None),
             running: std::sync::atomic::AtomicBool::new(false),
             shutdown: Arc::new(Notify::new()),
         }
@@ -107,9 +119,27 @@ impl MeshNode {
         }
 
         self.transport.listen(listen_addr).await?;
-        self.discovery.register(&local_info).await?;
         self.running
             .store(true, std::sync::atomic::Ordering::Relaxed);
+
+        // Keep our own record so the maintenance loop can retry registration.
+        *self.local_info.lock().unwrap_or_else(|e| e.into_inner()) = Some(local_info.clone());
+
+        // A coordinator failure must NOT stop the node: LAN discovery and the
+        // retry loop keep working, and the reason is surfaced to the UI
+        // (`MeshNode::last_error`) instead of a silent zero-peer state.
+        match self.discovery.register(&local_info).await {
+            Ok(()) => {
+                self.registered
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                info!("Registered with the coordination server");
+            }
+            Err(e) => {
+                self.registered
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                warn!("Coordinator registration failed (will retry): {e}");
+            }
+        }
 
         info!("Mesh node {} is running", self.local_id);
         Ok(())
@@ -118,7 +148,7 @@ impl MeshNode {
     /// Start the background maintenance loop.
     ///
     /// This spawns a task that periodically:
-    /// - Sends heartbeats to the coordination server
+    /// - Sends heartbeats to the coordination server (re-registering if needed)
     /// - Pings connected peers and disconnects stale ones
     /// - Discovers and connects to new peers
     pub fn start_maintenance(self: &Arc<Self>) {
@@ -128,11 +158,23 @@ impl MeshNode {
         tokio::spawn(async move {
             let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(60));
             let mut health_interval = tokio::time::interval(Duration::from_secs(30));
-            let mut discovery_interval = tokio::time::interval(Duration::from_secs(120));
+            let mut discovery_interval = tokio::time::interval(Duration::from_secs(60));
 
             // Don't fire immediately for health/discovery
             health_interval.tick().await;
             discovery_interval.tick().await;
+
+            // Run a first discovery pass shortly after startup. Waiting for the
+            // first interval kept the UI at zero peers for two minutes even
+            // when a coordinator peer or a LAN peer was already reachable.
+            tokio::select! {
+                _ = shutdown.notified() => return,
+                _ = tokio::time::sleep(Duration::from_secs(3)) => {}
+            }
+            if !node.is_running() {
+                return;
+            }
+            node.discover_and_connect_peers().await;
 
             loop {
                 tokio::select! {
@@ -142,9 +184,7 @@ impl MeshNode {
                     }
                     _ = heartbeat_interval.tick() => {
                         if !node.is_running() { break; }
-                        if let Err(e) = node.discovery.heartbeat().await {
-                            debug!("Heartbeat failed (non-fatal): {e}");
-                        }
+                        node.maintain_registration().await;
                     }
                     _ = health_interval.tick() => {
                         if !node.is_running() { break; }
@@ -157,6 +197,43 @@ impl MeshNode {
                 }
             }
         });
+    }
+
+    /// Send a heartbeat, re-registering when the coordinator does not know us.
+    ///
+    /// Registration used to be attempted only once, at startup, and its failure
+    /// was swallowed: a node that was offline — or that the coordinator rejected
+    /// because of a malformed URL — stayed invisible forever. The coordinator
+    /// also auto-registers unknown nodes on `/heartbeat`, so retrying here is
+    /// the recovery path for both cases.
+    async fn maintain_registration(&self) {
+        use std::sync::atomic::Ordering;
+
+        if self.registered.load(Ordering::Relaxed) {
+            match self.discovery.heartbeat().await {
+                Ok(()) => return,
+                Err(e) => {
+                    debug!("Heartbeat failed, will re-register: {e}");
+                    self.registered.store(false, Ordering::Relaxed);
+                }
+            }
+        }
+
+        let info = {
+            let guard = self.local_info.lock().unwrap_or_else(|e| e.into_inner());
+            guard.clone()
+        };
+        let Some(info) = info else {
+            return;
+        };
+
+        match self.discovery.register(&info).await {
+            Ok(()) => {
+                self.registered.store(true, Ordering::Relaxed);
+                info!("Registered with the coordination server");
+            }
+            Err(e) => debug!("Re-registration failed (will retry): {e}"),
+        }
     }
 
     /// Ping all connected peers and disconnect those that are unresponsive.
@@ -341,6 +418,11 @@ impl MeshNode {
     /// blocked by network issues. Errors are logged, not propagated.
     pub fn start_background(self: &Arc<Self>, listen_addr: SocketAddr, local_info: PeerInfo) {
         let node = Arc::clone(self);
+        // Mark the node as up immediately: callers (and the UI polling
+        // `is_running`) must not read "not started" while the STUN probe and
+        // the registration request are still in flight.
+        node.running
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         tokio::spawn(async move {
             match node.start(listen_addr, local_info).await {
                 Ok(()) => {
@@ -348,6 +430,9 @@ impl MeshNode {
                     info!("Mesh node {} running in background", node.local_id);
                 }
                 Err(e) => {
+                    node.running
+                        .store(false, std::sync::atomic::Ordering::Relaxed);
+                    node.set_start_error(Some(format!("mesh transport failed to start: {e}")));
                     warn!("Background mesh start failed (non-fatal): {e}");
                 }
             }
@@ -384,6 +469,40 @@ impl MeshNode {
     /// Check if the node is running.
     pub fn is_running(&self) -> bool {
         self.running.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// True once the coordination server accepted this node's registration.
+    ///
+    /// `false` while the node is up but running LAN-only, i.e. no other node
+    /// can discover it through the coordination server.
+    pub fn is_registered(&self) -> bool {
+        self.registered.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Most recent user-actionable failure, if any.
+    ///
+    /// Surfaced by the UI so "not connected" comes with a reason (unreachable
+    /// coordinator, HTTP error, transport bind failure) instead of a silent
+    /// zero-peer state.
+    pub fn last_error(&self) -> Option<String> {
+        if let Some(e) = self
+            .start_error
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
+            return Some(e);
+        }
+        self.discovery.last_error()
+    }
+
+    fn set_start_error(&self, message: Option<String>) {
+        *self.start_error.lock().unwrap_or_else(|e| e.into_inner()) = message;
+    }
+
+    /// Peers we know about (discovered; connected or still connecting).
+    pub fn known_peer_count(&self) -> usize {
+        self.peers.len()
     }
 
     /// Check if the node has any connected peers.
@@ -450,5 +569,89 @@ mod tests {
 
         let node = MeshNode::with_identity(identity, transport, discovery, MeshTier::Free, None);
         assert_eq!(node.local_id.to_hex(), expected_id);
+    }
+
+    #[test]
+    fn test_new_node_reports_no_registration_and_no_error() {
+        let node = make_node();
+        assert!(!node.is_registered());
+        assert_eq!(node.last_error(), None);
+        assert_eq!(node.known_peer_count(), 0);
+    }
+
+    fn make_peer() -> PeerInfo {
+        PeerInfo {
+            node_id: NodeId::generate().0,
+            hardware: hivebear_core::profile(),
+            available_memory_bytes: 8 * 1024 * 1024 * 1024,
+            available_vram_bytes: 0,
+            network_bandwidth_mbps: 100.0,
+            latency_ms: None,
+            tier: MeshTier::Free,
+            reputation_score: 1.0,
+            addr: "127.0.0.1:7878".parse().unwrap(),
+            external_addr: None,
+            nat_type: crate::nat::NatType::Unknown,
+            latency_map: std::collections::HashMap::new(),
+            serving_model_id: None,
+            swarm_id: None,
+            draft_capability: None,
+        }
+    }
+
+    /// Discovery source that always fails, to exercise the degraded path.
+    struct FailingDiscovery;
+
+    #[async_trait::async_trait]
+    impl PeerDiscovery for FailingDiscovery {
+        async fn register(&self, _info: &PeerInfo) -> Result<()> {
+            Err(crate::error::MeshError::Discovery(
+                "coordinator down".into(),
+            ))
+        }
+        async fn find_peers(&self, _model_id: &str, _min: u64) -> Result<Vec<PeerInfo>> {
+            Err(crate::error::MeshError::Discovery(
+                "coordinator down".into(),
+            ))
+        }
+        async fn heartbeat(&self) -> Result<()> {
+            Err(crate::error::MeshError::Discovery(
+                "coordinator down".into(),
+            ))
+        }
+        async fn deregister(&self) -> Result<()> {
+            Ok(())
+        }
+        fn last_error(&self) -> Option<String> {
+            Some("coordinator down".into())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_maintenance_registers_with_a_working_source() {
+        let node = make_node();
+        *node.local_info.lock().unwrap() = Some(make_peer());
+
+        node.maintain_registration().await;
+
+        assert!(node.is_registered());
+        assert_eq!(node.last_error(), None);
+    }
+
+    #[tokio::test]
+    async fn test_failed_registration_is_reported_and_not_fatal() {
+        let (id, _) = NodeId::generate();
+        let registry = MockRegistry::new();
+        let transport = Arc::new(MockTransport::new(id, registry));
+        let node = MeshNode::new(transport, Arc::new(FailingDiscovery), MeshTier::Free, None);
+        *node.local_info.lock().unwrap() = Some(make_peer());
+
+        // Retries must not panic and must keep reporting the reason.
+        node.maintain_registration().await;
+        assert!(!node.is_registered());
+        assert_eq!(node.last_error().as_deref(), Some("coordinator down"));
+
+        node.maintain_registration().await;
+        assert!(!node.is_registered());
     }
 }
