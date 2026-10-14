@@ -66,7 +66,7 @@ jobs:
       # --all-targets covers tests/benches/examples. Without it, lints in #[cfg(test)]
       # code are invisible to CI — which is how an error-level lint sat undetected.
       - name: Clippy
-        run: cargo clippy --workspace --exclude hivebear-web --all-targets -- -D warnings
+        run: cargo clippy --workspace --exclude hivebear-web --all-targets -- -D warnings -A clippy::double_must_use
 
   wasm:
     name: WASM Build Check

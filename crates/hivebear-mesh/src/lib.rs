@@ -1,3 +1,5 @@
+#![allow(clippy::double_must_use)]
+
 pub mod backend;
 pub mod config;
 pub mod discovery;

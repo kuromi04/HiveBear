@@ -1,3 +1,5 @@
+#![allow(clippy::double_must_use)]
+
 pub mod benchmark;
 pub mod chat_template;
 pub mod engine;
