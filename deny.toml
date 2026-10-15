@@ -21,16 +21,6 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 ignore = [
     # ── Tauri v2 Linux/macOS build chain: unmaintained, compile-time only ──
     "RUSTSEC-2024-0370",  # proc-macro-error: unmaintained proc-macro helper.
-    "RUSTSEC-2024-0411",  # gtk-rs GTK3 bindings: unmaintained (Tauri Linux webview).
-    "RUSTSEC-2024-0412",  # gtk-rs GTK3 bindings: unmaintained.
-    "RUSTSEC-2024-0413",  # gtk-rs GTK3 bindings: unmaintained.
-    "RUSTSEC-2024-0414",  # gtk-rs GTK3 bindings: unmaintained.
-    "RUSTSEC-2024-0415",  # gtk-rs GTK3 bindings: unmaintained.
-    "RUSTSEC-2024-0416",  # gtk-rs GTK3 bindings: unmaintained.
-    "RUSTSEC-2024-0417",  # gtk-rs GTK3 bindings: unmaintained.
-    "RUSTSEC-2024-0418",  # gtk-rs GTK3 bindings: unmaintained.
-    "RUSTSEC-2024-0419",  # gtk-rs GTK3 bindings: unmaintained.
-    "RUSTSEC-2024-0420",  # gtk-rs GTK3 bindings: unmaintained.
     "RUSTSEC-2024-0436",  # paste: unmaintained macro helper, reached via wgpu/metal.
 
     # ── Unmaintained leaf utilities, no known defect ──
