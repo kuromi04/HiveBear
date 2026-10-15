@@ -10,6 +10,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CMAKE_DISABLE_FIND_PACKAGE_OpenSSL: "TRUE"
 
 jobs:
   build-cli:
@@ -79,13 +80,13 @@ jobs:
       - name: Build with cargo (default features)
         if: "!matrix.use_cross && matrix.features == ''"
         env:
-          MACOSX_DEPLOYMENT_TARGET: "10.15"
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.target == 'aarch64-apple-darwin' && '11.0' || '10.15' }}
         run: cargo build --release -p hivebear-cli --target ${{ matrix.target }}
 
       - name: Build with cargo (extra features)
         if: "!matrix.use_cross && matrix.features != ''"
         env:
-          MACOSX_DEPLOYMENT_TARGET: "10.15"
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.target == 'aarch64-apple-darwin' && '11.0' || '10.15' }}
         run: cargo build --release -p hivebear-cli --target ${{ matrix.target }} --features ${{ matrix.features }}
 
       - name: Package (unix)
