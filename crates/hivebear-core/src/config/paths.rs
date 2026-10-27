@@ -1,6 +1,15 @@
 #[cfg(not(target_arch = "wasm32"))]
 use directories::ProjectDirs;
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
+
+/// Base directory that replaces the `ProjectDirs` locations, set once at
+/// startup by hosts where those locations are not writable (Android, iOS).
+/// Every `AppPaths::new()` honours it, so `Config::load`/`save` and the usage
+/// counters land in the same place as the registry and chat database.
+#[cfg(not(target_arch = "wasm32"))]
+static BASE_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
 
 #[cfg(not(target_arch = "wasm32"))]
 const QUALIFIER: &str = "com";
@@ -10,6 +19,7 @@ const ORGANIZATION: &str = "HiveBear";
 const APPLICATION: &str = "hivebear";
 
 /// Paths for HiveBear data, config, and cache.
+#[derive(Debug, Clone)]
 pub struct AppPaths {
     pub config_dir: PathBuf,
     pub config_file: PathBuf,
@@ -21,9 +31,21 @@ pub struct AppPaths {
 }
 
 impl AppPaths {
+    /// Route every later `AppPaths::new()` to `base`. Returns false if an
+    /// override was already set (the first one wins).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_base_override(base: PathBuf) -> bool {
+        BASE_OVERRIDE.set(base).is_ok()
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new() -> Self {
-        // Priority 1: Explicit environment overrides (e.g. set by Tauri on mobile or Termux)
+        // Priority 1: Explicit process-wide base override (Android / iOS host startup)
+        if let Some(base) = BASE_OVERRIDE.get() {
+            return Self::from_base(base.clone());
+        }
+
+        // Priority 2: Explicit environment overrides (e.g. set by Termux or CLI scripts)
         if let Ok(dir) =
             std::env::var("HIVEBEAR_HOME").or_else(|_| std::env::var("HIVEBEAR_DATA_DIR"))
         {
@@ -31,14 +53,14 @@ impl AppPaths {
             return Self::from_base(base);
         }
 
-        // Priority 2: On Android, default to app internal writable storage
+        // Priority 3: On Android, fallback to app internal writable storage
         #[cfg(target_os = "android")]
         {
             let base = PathBuf::from("/data/data/com.hivebear.app/files");
             return Self::from_base(base);
         }
 
-        // Priority 3: Standard ProjectDirs (Desktop Linux, Windows, macOS)
+        // Priority 4: Standard ProjectDirs (Desktop Linux, Windows, macOS)
         #[cfg(not(target_os = "android"))]
         {
             let dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION);
@@ -64,8 +86,7 @@ impl AppPaths {
                     let home = std::env::var("HOME")
                         .map(PathBuf::from)
                         .unwrap_or_else(|_| PathBuf::from("."));
-                    let base = home.join(".hivebear");
-                    Self::from_base(base)
+                    Self::from_base(home.join(".hivebear"))
                 }
             }
         }

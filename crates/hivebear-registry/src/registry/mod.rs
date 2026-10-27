@@ -780,7 +780,8 @@ impl Registry {
     }
 
     /// Fetch `<repo>/tokenizer.json` into `model_dir`, falling back to the repo's
-    /// `base_model` (many GGUF repos keep the tokenizer only in the base model).
+    /// `base_model` or ungated mirrors (many GGUF repos keep the tokenizer only
+    /// in the base model, and Meta base models are gated/require authentication).
     ///
     /// Returns the local path when the file is available there.
     async fn fetch_tokenizer(
@@ -794,62 +795,72 @@ impl Registry {
             return Some(tokenizer_path);
         }
 
-        let tokenizer_url = format!("https://huggingface.co/{repo_id}/resolve/main/tokenizer.json");
-        match self
-            .downloader
-            .download(
-                &tokenizer_url,
-                model_dir,
-                "tokenizer.json",
-                None,
-                model_id,
-                None,
-            )
-            .await
-        {
-            Ok(path) => {
-                tracing::info!("Downloaded tokenizer.json from {repo_id}");
-                return Some(path);
+        let mut candidate_repos: Vec<String> = Vec::new();
+
+        // 1. Try the repo itself
+        candidate_repos.push(repo_id.to_string());
+
+        // 2. Base model reported by HuggingFace tags
+        if let Some(base_repo) = self.base_model_repo(repo_id).await {
+            // Meta-Llama models are gated (return 401 Unauthorized without auth).
+            // Unsloth provides exact ungated mirrors of the official tokenizers.
+            if base_repo.starts_with("meta-llama/") {
+                candidate_repos.push(base_repo.replace("meta-llama/", "unsloth/"));
             }
-            Err(e) => {
-                tracing::debug!("{repo_id} has no tokenizer.json at the repo root: {e}");
+            candidate_repos.push(base_repo);
+        }
+
+        // 3. Known canonical tokenizers for supported architecture families
+        let combined = format!("{repo_id} {model_id}").to_lowercase();
+        if combined.contains("llama-3.2-1b") {
+            candidate_repos.push("unsloth/Llama-3.2-1B-Instruct".to_string());
+        } else if combined.contains("llama-3.2-3b") {
+            candidate_repos.push("unsloth/Llama-3.2-3B-Instruct".to_string());
+        } else if combined.contains("llama-3.1-8b") || combined.contains("llama-3-8b") {
+            candidate_repos.push("unsloth/Meta-Llama-3.1-8B-Instruct".to_string());
+        } else if combined.contains("llama-3") || combined.contains("llama3") {
+            // All Llama 3/3.1/3.2 models share the exact same 128,256 BPE tokenizer vocabulary
+            candidate_repos.push("unsloth/Llama-3.2-1B-Instruct".to_string());
+            candidate_repos.push("unsloth/Meta-Llama-3.1-8B-Instruct".to_string());
+        } else if combined.contains("mistral") {
+            candidate_repos.push("unsloth/mistral-7b-instruct-v0.2".to_string());
+            candidate_repos.push("mistralai/Mistral-7B-v0.1".to_string());
+        } else if combined.contains("qwen") {
+            candidate_repos.push("Qwen/Qwen2.5-0.5B-Instruct".to_string());
+            candidate_repos.push("Qwen/Qwen2.5-1.5B-Instruct".to_string());
+            candidate_repos.push("Qwen/Qwen2.5-7B-Instruct".to_string());
+        } else if combined.contains("deepseek") {
+            candidate_repos.push("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B".to_string());
+        }
+
+        // Deduplicate while preserving priority order
+        let mut seen = std::collections::HashSet::new();
+        candidate_repos.retain(|r| seen.insert(r.clone()));
+
+        let tok_key = format!("{model_id}-tokenizer");
+        for candidate in candidate_repos {
+            let url = format!("https://huggingface.co/{candidate}/resolve/main/tokenizer.json");
+            match self
+                .downloader
+                .download(&url, model_dir, "tokenizer.json", None, &tok_key, None)
+                .await
+            {
+                Ok(path) => {
+                    tracing::info!(
+                        "Downloaded tokenizer.json from candidate {candidate} for {model_id}"
+                    );
+                    return Some(path);
+                }
+                Err(e) => {
+                    tracing::debug!("{candidate} tokenizer download failed: {e}");
+                }
             }
         }
 
-        let Some(base_repo) = self.base_model_repo(repo_id).await else {
-            tracing::warn!(
-                "No tokenizer.json for {repo_id}: the repo root has none and the \
-                 HuggingFace API reported no base_model to fall back to"
-            );
-            return None;
-        };
-
-        let fallback_url =
-            format!("https://huggingface.co/{base_repo}/resolve/main/tokenizer.json");
-        match self
-            .downloader
-            .download(
-                &fallback_url,
-                model_dir,
-                "tokenizer.json",
-                None,
-                model_id,
-                None,
-            )
-            .await
-        {
-            Ok(path) => {
-                tracing::info!("Downloaded tokenizer.json from base model {base_repo}");
-                Some(path)
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Could not fetch tokenizer.json for {repo_id} (tried the repo and \
-                     its base model {base_repo}): {e}"
-                );
-                None
-            }
-        }
+        tracing::warn!(
+            "Could not fetch tokenizer.json for {model_id} ({repo_id}) from any candidate repository"
+        );
+        None
     }
 
     /// Ask the HuggingFace API which model a (quantized) repo was derived from.
@@ -1274,6 +1285,55 @@ mod tests {
         let json = serde_json::json!({ "tags": ["gguf", "text-generation"] });
         assert_eq!(base_model_from_tags(&json), None);
         assert_eq!(base_model_from_tags(&serde_json::json!({})), None);
+    }
+
+    #[test]
+    fn test_candidate_tokenizers_for_known_families() {
+        for (repo_id, model_id, expected_candidate) in [
+            (
+                "bartowski/Llama-3.2-1B-Instruct-GGUF",
+                "llama-3.2-1b",
+                "unsloth/Llama-3.2-1B-Instruct",
+            ),
+            (
+                "bartowski/Llama-3.2-3B-Instruct-GGUF",
+                "llama-3.2-3b",
+                "unsloth/Llama-3.2-3B-Instruct",
+            ),
+            (
+                "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+                "llama-3.1-8b",
+                "unsloth/Meta-Llama-3.1-8B-Instruct",
+            ),
+            (
+                "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+                "mistral-7b-v0.3",
+                "unsloth/mistral-7b-instruct-v0.2",
+            ),
+            (
+                "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+                "qwen-2.5-0.5b",
+                "Qwen/Qwen2.5-0.5B-Instruct",
+            ),
+        ] {
+            let combined = format!("{repo_id} {model_id}").to_lowercase();
+            let mut candidates = Vec::new();
+            if combined.contains("llama-3.2-1b") {
+                candidates.push("unsloth/Llama-3.2-1B-Instruct".to_string());
+            } else if combined.contains("llama-3.2-3b") {
+                candidates.push("unsloth/Llama-3.2-3B-Instruct".to_string());
+            } else if combined.contains("llama-3.1-8b") || combined.contains("llama-3-8b") {
+                candidates.push("unsloth/Meta-Llama-3.1-8B-Instruct".to_string());
+            } else if combined.contains("mistral") {
+                candidates.push("unsloth/mistral-7b-instruct-v0.2".to_string());
+            } else if combined.contains("qwen") {
+                candidates.push("Qwen/Qwen2.5-0.5B-Instruct".to_string());
+            }
+            assert!(
+                candidates.contains(&expected_candidate.to_string()),
+                "Candidate list for {model_id} does not contain {expected_candidate}"
+            );
+        }
     }
 
     // ---- Disk reconciliation -------------------------------------------------

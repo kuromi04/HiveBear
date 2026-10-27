@@ -354,6 +354,10 @@ enum MeshAction {
         /// Model file path or installed model ID
         model: String,
 
+        /// Direct peer socket address to connect to (e.g. 192.168.1.15:7878 or 192.168.1.15)
+        #[arg(long)]
+        peer: Option<String>,
+
         /// Single prompt (non-interactive mode)
         #[arg(long)]
         prompt: Option<String>,
@@ -2080,11 +2084,12 @@ async fn cmd_mesh(action: MeshAction) {
         }
         MeshAction::Run {
             model,
+            peer,
             prompt,
             context_length,
             temperature,
         } => {
-            cmd_mesh_run(model, prompt, context_length, temperature, hw).await;
+            cmd_mesh_run(model, peer, prompt, context_length, temperature, hw).await;
         }
         MeshAction::Stop => {
             println!("Sending stop signal to running mesh node...");
@@ -2160,53 +2165,85 @@ impl hivebear_mesh::MeshInferenceHandler for CliInferenceHandler {
 
 async fn cmd_mesh_run(
     model: String,
+    peer_override: Option<String>,
     prompt: Option<String>,
     context_length: u32,
     temperature: f32,
     hw: hivebear_core::HardwareProfile,
 ) {
     use std::io::Write;
-    use std::path::Path;
     use std::sync::Arc;
 
-    // Resolve the model (file path or registry ID)
-    let model_path_str = registry_commands::resolve_model(&model, &hw).await;
-    let model_path = Path::new(&model_path_str);
+    // Use requested model name or registry ID (does not need to exist locally for mesh offloading)
+    let target_model_id = model.clone();
 
-    if !model_path.exists() {
-        eprintln!(
-            "{}: Model not found at '{}'",
-            "Error".red().bold(),
-            model_path_str
-        );
-        eprintln!(
-            "{}",
-            "Install a model first with 'hivebear install <model>'".dimmed()
-        );
-        return;
-    }
-
-    // ── Attempt peer discovery ──────────────────────────────────────
-
+    // ── Resolve target peer address ─────────────────────────────────
     let config = hivebear_core::Config::load();
-    let discovery = Arc::new(
-        hivebear_mesh::discovery::server::CoordinationServerClient::new(
-            config.mesh.coordination_server.clone(),
-        ),
-    );
-    let peers = discovery.find_peers("", 0).await.unwrap_or_default();
+    let peer_addr: std::net::SocketAddr = if let Some(ref peer_str) = peer_override {
+        let addr_str = if peer_str.contains(':') {
+            peer_str.clone()
+        } else {
+            format!("{peer_str}:7878")
+        };
+        match addr_str.parse() {
+            Ok(sa) => sa,
+            Err(_) => match tokio::net::lookup_host(&addr_str).await {
+                Ok(mut addrs) => match addrs.next() {
+                    Some(sa) => sa,
+                    None => {
+                        eprintln!(
+                            "{}: Could not resolve peer address '{}'",
+                            "Error".red().bold(),
+                            peer_str
+                        );
+                        return;
+                    }
+                },
+                Err(e) => {
+                    eprintln!(
+                        "{}: Invalid peer address '{}': {e}",
+                        "Error".red().bold(),
+                        peer_str
+                    );
+                    return;
+                }
+            },
+        }
+    } else {
+        let discovery = Arc::new(
+            hivebear_mesh::discovery::server::CoordinationServerClient::new(
+                config.mesh.coordination_server.clone(),
+            ),
+        );
+        let peers = discovery.find_peers("", 0).await.unwrap_or_default();
+        if peers.is_empty() {
+            eprintln!(
+                "{}: No active peers found on the coordinator ({}).\n\
+                 Tip: Start your PC contributor node (`hivebear contribute`), or connect directly using `--peer <IP>:<PORT>`.",
+                "Mesh".bold().yellow(),
+                config.mesh.coordination_server
+            );
+            return;
+        }
 
-    if !peers.is_empty() {
         println!(
-            "{} {} peer(s) available — routing inference to best peer",
+            "{} {} peer(s) available on coordinator — routing to best peer",
             "Mesh:".bold().magenta(),
             peers.len()
         );
 
-        // Pick the best peer (first available with the model)
-        let best_peer = &peers[0];
-        let peer_addr = best_peer.addr;
+        // Prefer a peer advertising the target model
+        let matching = peers.iter().find(|p| {
+            p.serving_model_id
+                .as_ref()
+                .map(|m| m.contains(&target_model_id) || target_model_id.contains(m))
+                .unwrap_or(false)
+        });
+        let chosen = matching.unwrap_or(&peers[0]);
+        chosen.external_addr.unwrap_or(chosen.addr)
+    };
 
+    if true {
         // Create identity and QUIC transport for the client side
         let paths = hivebear_core::config::paths::AppPaths::new();
         let identity_path = paths.data_dir.join("node_identity.key");
@@ -2379,6 +2416,18 @@ async fn cmd_mesh_run(
 
     println!("{}", "Running locally (no mesh peers available).".yellow());
     println!();
+
+    let model_path_str = registry_commands::resolve_model(&model, &hw).await;
+    let model_path = std::path::Path::new(&model_path_str);
+    if !model_path.exists() {
+        eprintln!(
+            "{}: Model not found at '{}'. Install it first with 'hivebear install {}'",
+            "Error".red().bold(),
+            model_path_str,
+            model,
+        );
+        return;
+    }
 
     let orchestrator = create_orchestrator(hw.clone());
 
@@ -2577,8 +2626,9 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
 
     // Step 3: Connect to coordinator and matchmake
     println!("{}", "Step 3/4: Connecting to network...".cyan());
-    let coordinator =
-        hivebear_mesh::discovery::server::CoordinationServerClient::new(coordinator_url.clone());
+    let coordinator = std::sync::Arc::new(
+        hivebear_mesh::discovery::server::CoordinationServerClient::new(coordinator_url.clone()),
+    );
 
     let identity_path = hivebear_core::AppPaths::new()
         .data_dir
@@ -2591,6 +2641,15 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
     if let Some(ip) = hivebear_mesh::nat::discover_local_ip() {
         advertise_addr.set_ip(ip);
     }
+    // Discover external STUN address
+    let mut external_addr = None;
+    if let Ok(ext) =
+        hivebear_mesh::nat::stun::discover_external_addr("stun.l.google.com:19302").await
+    {
+        external_addr = Some(ext);
+        println!("  {} {}", "STUN External IP:".bold(), ext);
+    }
+
     let local_info = hivebear_mesh::PeerInfo {
         node_id: identity.node_id.clone(),
         hardware: hw.clone(),
@@ -2601,7 +2660,7 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
         tier: hivebear_mesh::MeshTier::Free,
         reputation_score: 1.0,
         addr: advertise_addr,
-        external_addr: None,
+        external_addr,
         nat_type: hivebear_mesh::NatType::Unknown,
         latency_map: std::collections::HashMap::new(),
         serving_model_id: Some(model_id.clone()),
@@ -2616,6 +2675,24 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
         );
         eprintln!("{}", "Running in standalone mode.".dimmed());
     }
+
+    // Spawn continuous heartbeat task (every 25s) so the coordinator does not prune the node after 60s
+    let hb_cancel = std::sync::Arc::new(tokio::sync::Notify::new());
+    let hb_cancel_clone = hb_cancel.clone();
+    let hb_coord = coordinator.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(25));
+        interval.tick().await; // skip initial immediate tick
+        loop {
+            tokio::select! {
+                _ = hb_cancel_clone.notified() => break,
+                _ = interval.tick() => {
+                    use hivebear_mesh::discovery::PeerDiscovery;
+                    let _ = hb_coord.heartbeat().await;
+                }
+            }
+        }
+    });
 
     // Try matchmaking
     let matchmake_result = coordinator
@@ -2816,6 +2893,8 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
     tokio::signal::ctrl_c()
         .await
         .expect("Failed to listen for ctrl+c");
+
+    hb_cancel.notify_one();
 
     println!();
     println!("{}", "Stopping contribution...".yellow());

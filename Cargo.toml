@@ -28,3 +28,11 @@ version = "0.2.14"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/kuromi04/HiveBear"
+
+# Keep target/ from ballooning and avoid memory exhaustion during parallel linking:
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+

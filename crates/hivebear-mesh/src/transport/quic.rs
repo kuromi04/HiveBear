@@ -167,10 +167,18 @@ impl MeshTransport for QuicTransport {
     }
 
     async fn connect(&self, addr: SocketAddr) -> Result<NodeId> {
-        let endpoint = self.endpoint.lock().await;
-        let endpoint = endpoint
-            .as_ref()
-            .ok_or_else(|| MeshError::Transport("Not listening".into()))?;
+        let mut ep_guard = self.endpoint.lock().await;
+        if ep_guard.is_none() {
+            // Automatically bind an ephemeral endpoint on 0.0.0.0:0 for client-only connections
+            let fallback_addr = SocketAddr::from(([0, 0, 0, 0], 0));
+            let (server_config, client_config) =
+                Self::generate_self_signed_config(self.security_mode, self.tofu_pins_path.clone())?;
+            let mut ep = Endpoint::server(server_config, fallback_addr)
+                .map_err(|e| MeshError::Transport(format!("bind client endpoint failed: {e}")))?;
+            ep.set_default_client_config(client_config);
+            *ep_guard = Some(ep);
+        }
+        let endpoint = ep_guard.as_ref().unwrap();
 
         info!("Connecting to peer at {addr}");
         let conn = endpoint

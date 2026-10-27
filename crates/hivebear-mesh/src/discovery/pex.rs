@@ -122,11 +122,39 @@ mod tests {
     use crate::config::MeshTier;
     use crate::transport::mock::{MockRegistry, MockTransport};
 
+    fn dummy_hardware() -> hivebear_core::HardwareProfile {
+        hivebear_core::HardwareProfile {
+            cpu: hivebear_core::types::CpuInfo {
+                model_name: "Test CPU".into(),
+                physical_cores: 4,
+                logical_cores: 8,
+                isa_extensions: vec![],
+                cache_size_bytes: 1024 * 1024,
+            },
+            memory: hivebear_core::types::MemoryInfo {
+                total_bytes: 16 * 1024 * 1024 * 1024,
+                available_bytes: 8 * 1024 * 1024 * 1024,
+                estimated_bandwidth_gbps: 25.0,
+            },
+            gpus: vec![],
+            storage: hivebear_core::types::StorageInfo {
+                available_bytes: 100 * 1024 * 1024 * 1024,
+                estimated_read_speed_mbps: 500.0,
+            },
+            platform: hivebear_core::types::PlatformInfo {
+                os: "linux".into(),
+                arch: "x86_64".into(),
+                is_mobile: false,
+                power_source: hivebear_core::types::PowerSource::Ac,
+            },
+        }
+    }
+
     fn make_peer(reputation: f64) -> PeerInfo {
         let (node_id, _) = NodeId::generate();
         PeerInfo {
             node_id,
-            hardware: hivebear_core::profile(),
+            hardware: dummy_hardware(),
             available_memory_bytes: 8 * 1024 * 1024 * 1024,
             available_vram_bytes: 0,
             network_bandwidth_mbps: 100.0,

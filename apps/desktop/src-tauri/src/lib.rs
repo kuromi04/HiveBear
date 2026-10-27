@@ -31,6 +31,7 @@ pub fn run() {
                     .path()
                     .app_data_dir()
                     .expect("Failed to resolve app data directory");
+                hivebear_core::config::paths::AppPaths::set_base_override(base.clone());
                 std::env::set_var("HIVEBEAR_HOME", &base);
                 std::env::set_var("HIVEBEAR_DATA_DIR", &base);
                 let paths = AppState::paths_from_base(base);
