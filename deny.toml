@@ -49,6 +49,7 @@ ignore = [
     # ── zip / tauri-plugin-updater: symlink extraction issues in zip 4.x ──
     # Reached only via tauri-plugin-updater when extracting verified updater bundles.
     # Bundles are signed with minisign and fetched only from official repo releases.
+    "RUSTSEC-2026-0367",  # zip: Insecure preservation of SUID/SGID bits during extraction.
     "RUSTSEC-2026-0368",  # zip: ZipArchive::extract symlink creation outside destination.
     "RUSTSEC-2026-0369",  # zip: ZipStreamReader::extract Unix permissions through symlinks.
 
