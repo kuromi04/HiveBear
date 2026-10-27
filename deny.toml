@@ -45,6 +45,14 @@ ignore = [
     # XML reaches either path. Recheck when self_update/Tauri bump their pins.
     "RUSTSEC-2026-0194",  # quick-xml: quadratic runtime on duplicate attribute names.
     "RUSTSEC-2026-0195",  # quick-xml: unbounded namespace allocation in NsReader.
+
+    # ── zstd-safe / zstd-sys: blocked by zstd 0.13 upstream dependency pin ──
+    # RUSTSEC-2026-0398 affects seekable archive decompression (not used in HiveBear).
+    # RUSTSEC-2026-0403 affects streaming legacy frames (not used in HiveBear wire protocol).
+    # RUSTSEC-2026-0410 affects wasm32 allocator shim (HiveBear mesh uses native QUIC/TCP).
+    "RUSTSEC-2026-0398",  # zstd-safe: Seekable::decompress offset past end.
+    "RUSTSEC-2026-0403",  # zstd-safe: Uninitialized memory on legacy frame failure.
+    "RUSTSEC-2026-0410",  # zstd-sys: wasm32 allocator shim on allocation failure.
 ]
 
 [licenses]
