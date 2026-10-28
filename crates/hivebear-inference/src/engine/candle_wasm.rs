@@ -170,11 +170,31 @@ fn build_prompt(req: &GenerateRequest) -> String {
     chat_template::render(format, &req.messages, &req.tools)
 }
 
+/// Extract the logits corresponding to the last generated token.
+fn extract_last_logits(logits: &Tensor) -> Result<Tensor> {
+    match logits.dims() {
+        [_, seq_len, _vocab] => logits
+            .i((.., seq_len - 1, ..))
+            .map_err(|e| InferenceError::GenerationError(format!("Index failed: {e}"))),
+        [_, _vocab] => Ok(logits.clone()),
+        [_vocab] => logits
+            .unsqueeze(0)
+            .map_err(|e| InferenceError::GenerationError(format!("Unsqueeze failed: {e}"))),
+        dims => Err(InferenceError::GenerationError(format!(
+            "Unexpected logits dimensions {dims:?}"
+        ))),
+    }
+}
+
 /// Sample the next token from logits.
 fn sample_token(logits: &Tensor, temperature: f32, top_p: f32) -> Result<u32> {
-    let logits = logits
-        .squeeze(0)
-        .map_err(|e| InferenceError::GenerationError(format!("Squeeze failed: {e}")))?;
+    let logits = if logits.dims().len() > 1 {
+        logits
+            .squeeze(0)
+            .map_err(|e| InferenceError::GenerationError(format!("Squeeze failed: {e}")))?
+    } else {
+        logits.clone()
+    };
 
     let logits = if temperature > 0.0 {
         let logits = (&logits / temperature as f64)
@@ -236,6 +256,45 @@ fn rand_f32() -> f32 {
 }
 
 /// Blocking generation returning the complete text.
+/// Find all valid EOS token IDs for the given model/tokenizer in WASM.
+fn find_eos_tokens(
+    tokenizer: &tokenizers::Tokenizer,
+    model_name: Option<&str>,
+) -> std::collections::HashSet<u32> {
+    let mut tokens = std::collections::HashSet::new();
+    let format = chat_template::detect_template(model_name.unwrap_or(""));
+
+    let primary = match format {
+        chat_template::TemplateFormat::Llama3 => "<|eot_id|>",
+        chat_template::TemplateFormat::ChatML => "<|im_end|>",
+        chat_template::TemplateFormat::Gemma => "<end_of_turn>",
+        chat_template::TemplateFormat::Phi3 => "<|end|>",
+        chat_template::TemplateFormat::Mistral => "</s>",
+        chat_template::TemplateFormat::Generic => "</s>",
+    };
+
+    if let Some(id) = tokenizer.token_to_id(primary) {
+        tokens.insert(id);
+    }
+
+    for candidate in &[
+        "</s>",
+        "<|endoftext|>",
+        "<|eot_id|>",
+        "<|end_of_text|>",
+        "<|im_end|>",
+        "<|end|>",
+        "<end_of_turn>",
+        "<eos>",
+    ] {
+        if let Some(id) = tokenizer.token_to_id(candidate) {
+            tokens.insert(id);
+        }
+    }
+
+    tokens
+}
+
 fn generate_blocking(loaded: &mut LoadedModel, req: &GenerateRequest) -> Result<String> {
     let prompt = build_prompt(req);
     let encoding = loaded
@@ -254,23 +313,16 @@ fn generate_blocking(loaded: &mut LoadedModel, req: &GenerateRequest) -> Result<
         .forward(&input, 0)
         .map_err(|e| InferenceError::GenerationError(format!("Forward pass failed: {e}")))?;
 
-    let last_logits = logits
-        .i((.., logits.dim(1).unwrap_or(1) - 1, ..))
-        .map_err(|e| InferenceError::GenerationError(format!("Index failed: {e}")))?;
+    let last_logits = extract_last_logits(&logits)?;
 
     let mut next_token = sample_token(&last_logits, req.sampling.temperature, req.sampling.top_p)?;
     let mut output = String::new();
     let seq_len = prompt_tokens.len();
 
-    let eos_token = loaded
-        .tokenizer
-        .token_to_id("</s>")
-        .or_else(|| loaded.tokenizer.token_to_id("<|endoftext|>"))
-        .or_else(|| loaded.tokenizer.token_to_id("<|end|>"))
-        .unwrap_or(u32::MAX);
+    let eos_tokens = find_eos_tokens(&loaded.tokenizer, req.model_name.as_deref());
 
     for i in 0..req.max_tokens {
-        if next_token == eos_token {
+        if eos_tokens.contains(&next_token) {
             break;
         }
 
@@ -298,9 +350,7 @@ fn generate_blocking(loaded: &mut LoadedModel, req: &GenerateRequest) -> Result<
             .forward(&input, seq_len + i as usize)
             .map_err(|e| InferenceError::GenerationError(format!("Forward failed: {e}")))?;
 
-        let last_logits = logits
-            .i((.., logits.dim(1).unwrap_or(1) - 1, ..))
-            .map_err(|e| InferenceError::GenerationError(format!("Index failed: {e}")))?;
+        let last_logits = extract_last_logits(&logits)?;
 
         next_token = sample_token(&last_logits, req.sampling.temperature, req.sampling.top_p)?;
     }
@@ -327,13 +377,9 @@ fn collect_tokens_blocking(loaded: &mut LoadedModel, req: &GenerateRequest) -> V
         }
     };
 
-    let last_logits = match logits.i((.., logits.dim(1).unwrap_or(1) - 1, ..)) {
+    let last_logits = match extract_last_logits(&logits) {
         Ok(l) => l,
-        Err(e) => {
-            return vec![Err(InferenceError::GenerationError(format!(
-                "Index failed: {e}"
-            )))]
-        }
+        Err(e) => return vec![Err(e)],
     };
 
     let mut next_token =
@@ -345,15 +391,10 @@ fn collect_tokens_blocking(loaded: &mut LoadedModel, req: &GenerateRequest) -> V
     let seq_len = prompt_tokens.len();
     let mut accumulated = String::new();
 
-    let eos_token = loaded
-        .tokenizer
-        .token_to_id("</s>")
-        .or_else(|| loaded.tokenizer.token_to_id("<|endoftext|>"))
-        .or_else(|| loaded.tokenizer.token_to_id("<|end|>"))
-        .unwrap_or(u32::MAX);
+    let eos_tokens = find_eos_tokens(&loaded.tokenizer, req.model_name.as_deref());
 
     for i in 0..req.max_tokens {
-        if next_token == eos_token {
+        if eos_tokens.contains(&next_token) {
             break;
         }
 
@@ -407,12 +448,10 @@ fn collect_tokens_blocking(loaded: &mut LoadedModel, req: &GenerateRequest) -> V
             }
         };
 
-        let last_logits = match logits.i((.., logits.dim(1).unwrap_or(1) - 1, ..)) {
+        let last_logits = match extract_last_logits(&logits) {
             Ok(l) => l,
             Err(e) => {
-                tokens.push(Err(InferenceError::GenerationError(format!(
-                    "Index failed: {e}"
-                ))));
+                tokens.push(Err(e));
                 break;
             }
         };

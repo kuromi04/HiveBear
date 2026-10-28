@@ -1091,8 +1091,17 @@ fn compute_compatibility(hw: &HardwareProfile, meta: &ModelMetadata) -> f64 {
     // On mobile devices (Android/iOS), Candle is the only available inference engine.
     // Candle's quantized_llama only supports the Llama/Mistral GGUF architecture.
     // Models with other architectures (e.g. Qwen2, Gemma, Phi3) cannot run on-device.
-    let is_mobile = hw.platform.os == "android" || hw.platform.os == "ios";
+    let is_mobile = hw.platform.is_mobile || hw.platform.os == "android" || hw.platform.os == "ios";
     if is_mobile {
+        // Enforce parameter limits on mobile: models > 3.5B (like Llama-3-8B or Mistral-7B)
+        // should never be scored as compatible on phones/tablets due to RAM limits and Android LMK.
+        if meta.params_billions > 3.5 {
+            return 0.0;
+        }
+        if hw.memory.available_bytes <= 4 * 1024 * 1024 * 1024 && meta.params_billions > 1.5 {
+            return 0.0;
+        }
+
         let is_compatible = hivebear_core::recommender::model_db::builtin_models()
             .iter()
             .find(|e| {
@@ -1232,6 +1241,73 @@ mod tests {
 
         let result = pick_file(&files, Some("Q8_0"), None).unwrap();
         assert_eq!(result.filename, "model-Q8_0.gguf");
+    }
+
+    #[test]
+    fn test_compute_compatibility_mobile() {
+        use hivebear_core::types::*;
+        let make_hw = |is_mobile: bool, os: &str, ram_bytes: u64| HardwareProfile {
+            cpu: CpuInfo {
+                model_name: "Test CPU".into(),
+                physical_cores: 8,
+                logical_cores: 8,
+                isa_extensions: vec![],
+                cache_size_bytes: 0,
+            },
+            memory: MemoryInfo {
+                total_bytes: ram_bytes,
+                available_bytes: ram_bytes,
+                estimated_bandwidth_gbps: 20.0,
+            },
+            gpus: vec![],
+            storage: StorageInfo {
+                available_bytes: 50 * 1024 * 1024 * 1024,
+                estimated_read_speed_mbps: 300.0,
+            },
+            platform: PlatformInfo {
+                os: os.into(),
+                arch: "aarch64".into(),
+                is_mobile,
+                power_source: PowerSource::Ac,
+            },
+        };
+
+        let make_meta = |id: &str, name: &str, params: f64| ModelMetadata {
+            id: id.into(),
+            name: name.into(),
+            params_billions: params,
+            formats: vec![ModelFormat::Gguf],
+            context_length: 4096,
+            quality_score: 0.8,
+            category: hivebear_core::recommender::model_db::ModelCategory::General,
+            source: crate::metadata::ModelSource::Local { imported: false },
+            huggingface_id: None,
+            installed: None,
+            description: None,
+            tags: vec![],
+            downloads_count: None,
+            likes_count: None,
+            last_modified: None,
+        };
+
+        let hw_8gb = make_hw(true, "android", 8 * 1024 * 1024 * 1024);
+
+        // 1B Llama model: compatible
+        let meta_1b = make_meta("llama-3.2-1b-instruct", "Llama 3.2 1B Instruct", 1.23);
+        assert!(compute_compatibility(&hw_8gb, &meta_1b) > 0.0);
+
+        // 8B Llama model: capped at 3.5B on mobile, must be 0.0
+        let meta_8b = make_meta("llama-3.1-8b-instruct", "Llama 3.1 8B Instruct", 8.03);
+        assert_eq!(compute_compatibility(&hw_8gb, &meta_8b), 0.0);
+
+        // Qwen model (incompatible with Candle on mobile): must be 0.0
+        let meta_qwen = make_meta("qwen-2.5-1.5b-instruct", "Qwen 2.5 1.5B Instruct", 1.54);
+        assert_eq!(compute_compatibility(&hw_8gb, &meta_qwen), 0.0);
+
+        // 3B model on <= 4GB RAM phone: must be 0.0
+        let hw_3gb = make_hw(true, "android", 3 * 1024 * 1024 * 1024);
+        let meta_3b = make_meta("llama-3.2-3b-instruct", "Llama 3.2 3B Instruct", 3.21);
+        assert_eq!(compute_compatibility(&hw_3gb, &meta_3b), 0.0);
     }
 
     #[test]

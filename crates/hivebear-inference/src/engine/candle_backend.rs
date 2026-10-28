@@ -502,11 +502,36 @@ fn build_prompt(req: &GenerateRequest) -> String {
     chat_template::render(format, &req.messages, &req.tools)
 }
 
+/// Extract the logits corresponding to the last generated token.
+///
+/// Candle's `ModelWeights::forward` returns either:
+/// - A 2D tensor `[batch_size, vocab_size]` if it already indexed the last sequence position internally (e.g. quantized_llama).
+/// - A 3D tensor `[batch_size, seq_len, vocab_size]` if it returns logits for the entire sequence.
+/// - A 1D tensor `[vocab_size]` if batch size is collapsed.
+fn extract_last_logits(logits: &Tensor) -> Result<Tensor> {
+    match logits.dims() {
+        [_, seq_len, _vocab] => logits
+            .i((.., seq_len - 1, ..))
+            .map_err(|e| InferenceError::GenerationError(format!("Index failed: {e}"))),
+        [_, _vocab] => Ok(logits.clone()),
+        [_vocab] => logits
+            .unsqueeze(0)
+            .map_err(|e| InferenceError::GenerationError(format!("Unsqueeze failed: {e}"))),
+        dims => Err(InferenceError::GenerationError(format!(
+            "Unexpected logits dimensions {dims:?}"
+        ))),
+    }
+}
+
 /// Sample the next token from logits using temperature sampling.
 fn sample_token(logits: &Tensor, temperature: f32, top_p: f32) -> Result<u32> {
-    let logits = logits
-        .squeeze(0)
-        .map_err(|e| InferenceError::GenerationError(format!("Squeeze failed: {e}")))?;
+    let logits = if logits.dims().len() > 1 {
+        logits
+            .squeeze(0)
+            .map_err(|e| InferenceError::GenerationError(format!("Squeeze failed: {e}")))?
+    } else {
+        logits.clone()
+    };
 
     let logits = if temperature > 0.0 {
         let logits = (&logits / temperature as f64)
@@ -614,18 +639,16 @@ fn generate_blocking(loaded: &LoadedModel, req: &GenerateRequest) -> Result<Stri
         .forward(&input, 0)
         .map_err(|e| InferenceError::GenerationError(format!("Forward pass failed: {e}")))?;
 
-    let last_logits = logits
-        .i((.., logits.dim(1).unwrap_or(1) - 1, ..))
-        .map_err(|e| InferenceError::GenerationError(format!("Index failed: {e}")))?;
+    let last_logits = extract_last_logits(&logits)?;
 
     let mut next_token = sample_token(&last_logits, req.sampling.temperature, req.sampling.top_p)?;
     let mut output = String::new();
     let seq_len = prompt_tokens.len();
 
-    let eos_token = find_eos_token(&loaded.tokenizer, req.model_name.as_deref());
+    let eos_tokens = find_eos_tokens(&loaded.tokenizer, req.model_name.as_deref());
 
     for i in 0..req.max_tokens {
-        if next_token == eos_token {
+        if eos_tokens.contains(&next_token) {
             break;
         }
 
@@ -654,9 +677,7 @@ fn generate_blocking(loaded: &LoadedModel, req: &GenerateRequest) -> Result<Stri
             .forward(&input, seq_len + i as usize)
             .map_err(|e| InferenceError::GenerationError(format!("Forward failed: {e}")))?;
 
-        let last_logits = logits
-            .i((.., logits.dim(1).unwrap_or(1) - 1, ..))
-            .map_err(|e| InferenceError::GenerationError(format!("Index failed: {e}")))?;
+        let last_logits = extract_last_logits(&logits)?;
 
         next_token = sample_token(&last_logits, req.sampling.temperature, req.sampling.top_p)?;
     }
@@ -688,18 +709,16 @@ fn stream_blocking(
         .forward(&input, 0)
         .map_err(|e| InferenceError::GenerationError(format!("Forward pass failed: {e}")))?;
 
-    let last_logits = logits
-        .i((.., logits.dim(1).unwrap_or(1) - 1, ..))
-        .map_err(|e| InferenceError::GenerationError(format!("Index failed: {e}")))?;
+    let last_logits = extract_last_logits(&logits)?;
 
     let mut next_token = sample_token(&last_logits, req.sampling.temperature, req.sampling.top_p)?;
     let seq_len = prompt_tokens.len();
     let mut accumulated = String::new();
 
-    let eos_token = find_eos_token(&loaded.tokenizer, req.model_name.as_deref());
+    let eos_tokens = find_eos_tokens(&loaded.tokenizer, req.model_name.as_deref());
 
     for i in 0..req.max_tokens {
-        if next_token == eos_token {
+        if eos_tokens.contains(&next_token) {
             break;
         }
 
@@ -738,9 +757,7 @@ fn stream_blocking(
             .forward(&input, seq_len + i as usize)
             .map_err(|e| InferenceError::GenerationError(format!("Forward failed: {e}")))?;
 
-        let last_logits = logits
-            .i((.., logits.dim(1).unwrap_or(1) - 1, ..))
-            .map_err(|e| InferenceError::GenerationError(format!("Index failed: {e}")))?;
+        let last_logits = extract_last_logits(&logits)?;
 
         next_token = sample_token(&last_logits, req.sampling.temperature, req.sampling.top_p)?;
     }
@@ -748,11 +765,14 @@ fn stream_blocking(
     Ok(())
 }
 
-/// Find the EOS token ID by checking model-family-specific tokens and common fallbacks.
-fn find_eos_token(tokenizer: &tokenizers::Tokenizer, model_name: Option<&str>) -> u32 {
+/// Find all valid EOS token IDs for the given model/tokenizer.
+fn find_eos_tokens(
+    tokenizer: &tokenizers::Tokenizer,
+    model_name: Option<&str>,
+) -> std::collections::HashSet<u32> {
+    let mut tokens = std::collections::HashSet::new();
     let format = chat_template::detect_template(model_name.unwrap_or(""));
 
-    // Check the model-family-specific EOS token first
     let primary = match format {
         chat_template::TemplateFormat::Llama3 => "<|eot_id|>",
         chat_template::TemplateFormat::ChatML => "<|im_end|>",
@@ -762,21 +782,50 @@ fn find_eos_token(tokenizer: &tokenizers::Tokenizer, model_name: Option<&str>) -
         chat_template::TemplateFormat::Generic => "</s>",
     };
 
-    tokenizer
-        .token_to_id(primary)
-        // Fallback chain for models whose tokenizer uses a different EOS spelling
-        .or_else(|| tokenizer.token_to_id("</s>"))
-        .or_else(|| tokenizer.token_to_id("<|endoftext|>"))
-        .or_else(|| tokenizer.token_to_id("<|eot_id|>"))
-        .or_else(|| tokenizer.token_to_id("<|im_end|>"))
-        .or_else(|| tokenizer.token_to_id("<|end|>"))
-        .or_else(|| tokenizer.token_to_id("<end_of_turn>"))
-        .unwrap_or(u32::MAX)
+    if let Some(id) = tokenizer.token_to_id(primary) {
+        tokens.insert(id);
+    }
+
+    for candidate in &[
+        "</s>",
+        "<|endoftext|>",
+        "<|eot_id|>",
+        "<|end_of_text|>",
+        "<|im_end|>",
+        "<|end|>",
+        "<end_of_turn>",
+        "<eos>",
+    ] {
+        if let Some(id) = tokenizer.token_to_id(candidate) {
+            tokens.insert(id);
+        }
+    }
+
+    tokens
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extract_last_logits_2d_and_3d() {
+        use candle_core::DType;
+        let dev = Device::Cpu;
+        // 2D logits from Candle forward: [1, 128]
+        let logits_2d = Tensor::zeros((1, 128), DType::F32, &dev).unwrap();
+        let extracted_2d = extract_last_logits(&logits_2d).unwrap();
+        assert_eq!(extracted_2d.dims(), &[1, 128]);
+
+        // 3D logits: [1, 10, 128]
+        let logits_3d = Tensor::zeros((1, 10, 128), DType::F32, &dev).unwrap();
+        let extracted_3d = extract_last_logits(&logits_3d).unwrap();
+        assert_eq!(extracted_3d.dims(), &[1, 128]);
+
+        // Sampling from 2D tensor should work and not crash
+        let sampled = sample_token(&extracted_2d, 0.0, 1.0).unwrap();
+        assert_eq!(sampled, 0);
+    }
 
     #[test]
     fn test_candle_backend_metadata() {

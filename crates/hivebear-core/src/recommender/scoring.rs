@@ -18,12 +18,22 @@ const QUANT_LEVELS: &[Quantization] = &[
 
 /// Maximum model size in billions of parameters by platform.
 fn max_params_for_platform(profile: &HardwareProfile) -> f64 {
+    let is_mobile = profile.platform.is_mobile
+        || profile.platform.os == "android"
+        || profile.platform.os == "ios";
+
     if profile.platform.os == "browser" || profile.platform.arch == "wasm32" {
         // Browser: limited by available memory, cap at 8B (realistically 1-3B)
         8.0
-    } else if profile.platform.is_mobile {
-        // Mobile: 3B max to keep memory usage low
-        3.0
+    } else if is_mobile {
+        // Mobile: strict parameter ceiling based on available RAM.
+        // Devices with <= 4GB RAM are capped at 1.5B (e.g. Llama 3.2 1B).
+        // Devices with > 4GB RAM are capped at 3.5B (e.g. Llama 3.2 3B).
+        if profile.memory.available_bytes <= 4 * 1024 * 1024 * 1024 {
+            1.5
+        } else {
+            3.5
+        }
     } else if profile.platform.arch == "aarch64"
         && profile.memory.total_bytes <= 9 * 1024 * 1024 * 1024
     {
@@ -37,9 +47,12 @@ fn max_params_for_platform(profile: &HardwareProfile) -> f64 {
 
 /// Get memory usage fraction based on platform.
 fn memory_fraction_for_platform(profile: &HardwareProfile, requested: f64) -> f64 {
-    if profile.platform.is_mobile {
-        // Mobile OS kills background apps aggressively — use at most 50%
-        requested.min(0.50)
+    let is_mobile = profile.platform.is_mobile
+        || profile.platform.os == "android"
+        || profile.platform.os == "ios";
+    if is_mobile {
+        // Mobile OS kills background apps aggressively — use at most 40%
+        requested.min(0.40)
     } else {
         requested
     }
@@ -61,7 +74,16 @@ pub fn recommend(
 
     let mut recommendations: Vec<ModelRecommendation> = Vec::new();
 
+    let is_mobile = profile.platform.is_mobile
+        || profile.platform.os == "android"
+        || profile.platform.os == "ios";
+
     for model in models {
+        // On mobile, only recommend models that can actually run with Candle
+        if is_mobile && !model.candle_compatible {
+            continue;
+        }
+
         // Skip models too large for this platform
         if model.params_billions > max_params {
             continue;
@@ -360,6 +382,57 @@ mod tests {
                 is_mobile: false,
                 power_source: PowerSource::Ac,
             },
+        }
+    }
+
+    #[test]
+    fn test_recommend_mobile_caps_and_candle_compat() {
+        let mut profile = test_profile(4, 0, 15.0);
+        profile.platform.is_mobile = true;
+        profile.platform.os = "android".into();
+
+        let models = builtin_models();
+        let recs = recommend(&profile, &models, 0.85, 1.0, 10);
+
+        // On 4GB mobile device:
+        // 1. All recommended models MUST have candle_compatible = true
+        // 2. All recommended models MUST have params <= 1.5B
+        assert!(
+            !recs.is_empty(),
+            "Should recommend at least one model for mobile"
+        );
+        for rec in &recs {
+            let entry = models.iter().find(|m| m.id == rec.model_id).unwrap();
+            assert!(
+                entry.candle_compatible,
+                "Model {} is not candle compatible but recommended on mobile",
+                rec.model_name
+            );
+            assert!(
+                entry.params_billions <= 1.5,
+                "Model {} has params > 1.5B on 4GB mobile",
+                rec.model_name
+            );
+        }
+
+        // On 8GB mobile device:
+        let mut profile_8gb = test_profile(8, 0, 25.0);
+        profile_8gb.platform.is_mobile = true;
+        profile_8gb.platform.os = "android".into();
+        let recs_8gb = recommend(&profile_8gb, &models, 0.85, 1.0, 10);
+        assert!(!recs_8gb.is_empty());
+        for rec in &recs_8gb {
+            let entry = models.iter().find(|m| m.id == rec.model_id).unwrap();
+            assert!(
+                entry.candle_compatible,
+                "Model {} is not candle compatible",
+                rec.model_name
+            );
+            assert!(
+                entry.params_billions <= 3.5,
+                "Model {} has params > 3.5B on mobile",
+                rec.model_name
+            );
         }
     }
 

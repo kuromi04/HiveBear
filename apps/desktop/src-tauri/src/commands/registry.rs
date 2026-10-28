@@ -32,7 +32,11 @@ pub async fn install_model(
     model_id: String,
     quant: Option<String>,
 ) -> CmdResult<hivebear_registry::InstalledInfo> {
-    let is_mobile = cfg!(target_os = "android") || state.profile.platform.os == "android";
+    let is_mobile = cfg!(target_os = "android")
+        || cfg!(target_os = "ios")
+        || state.profile.platform.is_mobile
+        || state.profile.platform.os == "android"
+        || state.profile.platform.os == "ios";
     if is_mobile {
         let builtins = hivebear_core::recommender::model_db::builtin_models();
         if let Some(entry) = builtins.iter().find(|e| e.id == model_id) {
@@ -42,6 +46,17 @@ pub async fn install_model(
                         "Model '{}' cannot run locally on mobile (Candle engine only supports Llama/Mistral architectures). \
                          Please install a Llama model (e.g. Llama 3.2 1B or 3B), or use Mesh to run this model from your PC.",
                         entry.name
+                    ),
+                    code: crate::error::ErrorCode::RegistryError,
+                }.into());
+            }
+            if entry.params_billions > 3.5 {
+                return Err(crate::error::CommandError {
+                    message: format!(
+                        "Model '{}' ({:.1}B parameters) is too large to run locally on mobile. \
+                         Mobile devices support models up to 3.5B (e.g. Llama 3.2 1B or 3B). \
+                         You can run this model on your PC and access it from mobile via HiveBear Mesh.",
+                        entry.name, entry.params_billions
                     ),
                     code: crate::error::ErrorCode::RegistryError,
                 }.into());
