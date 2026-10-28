@@ -182,6 +182,10 @@ jobs:
           done
           cd ..
 
+          echo "=== Building Standalone hivebear CLI for Termux (aarch64-linux-android) ==="
+          cargo build --release --target aarch64-linux-android -p hivebear-cli --bin hivebear --no-default-features --features "api,cloud,candle"
+          tar -czf android-artifacts/hivebear-aarch64-linux-android.tar.gz -C target/aarch64-linux-android/release hivebear
+
           echo "=== Found Signed Android Build Artifacts ==="
           ls -lh android-artifacts/
 
@@ -207,13 +211,13 @@ jobs:
           name: android-apk
           path: artifacts
 
-      - name: Collect APK assets
+      - name: Collect APK and CLI assets
         env:
           TAG_NAME: ${{ github.event.inputs.tag_name || github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
           mkdir -p release
-          find artifacts -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} release/ \;
+          find artifacts -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.tar.gz" \) -exec cp {} release/ \;
           cd release
           for f in *-unsigned*.apk; do
             [ -f "$f" ] && mv "$f" "${f//-unsigned/}"

@@ -10,9 +10,10 @@ name = "hivebear"
 path = "src/main.rs"
 
 [features]
-default = ["api", "cloud", "llamacpp"]
+default = ["api", "cloud", "candle", "llamacpp"]
 api = ["dep:axum"]
 cloud = ["hivebear-inference/cloud"]
+candle = ["hivebear-inference/candle"]
 llamacpp = ["hivebear-inference/llamacpp"]
 llamacpp-cuda = ["llamacpp", "hivebear-inference/llamacpp-cuda"]
 llamacpp-metal = ["llamacpp", "hivebear-inference/llamacpp-metal"]
@@ -21,7 +22,7 @@ headless = []
 
 [dependencies]
 hivebear-core = { path = "../hivebear-core" }
-hivebear-inference = { path = "../hivebear-inference" }
+hivebear-inference = { path = "../hivebear-inference", default-features = false }
 hivebear-registry = { path = "../hivebear-registry" }
 hivebear-mesh = { path = "../hivebear-mesh" }
 clap = { version = "4", features = ["derive"] }
