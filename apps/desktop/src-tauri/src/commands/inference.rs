@@ -68,6 +68,19 @@ pub async fn stream_chat(
     use futures::StreamExt;
     use tauri::Emitter;
 
+    let mesh_session = {
+        let sessions = state
+            .mesh_peer_connections
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        sessions.get(&handle_id).cloned()
+    };
+
+    if let Some(session) = mesh_session {
+        return stream_mesh_peer_chat(&state, window, &session, messages, temperature, max_tokens)
+            .await;
+    }
+
     let models = state.orchestrator.loaded_models();
     let info = models
         .iter()
@@ -144,6 +157,15 @@ pub async fn stream_chat(
 
 #[tauri::command]
 pub async fn unload_model(state: State<'_, AppState>, handle_id: u64) -> CmdResult<()> {
+    {
+        let mut mesh_sessions = state
+            .mesh_peer_connections
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if mesh_sessions.remove(&handle_id).is_some() {
+            return Ok(());
+        }
+    }
     let models = state.orchestrator.loaded_models();
     let info = models
         .iter()
@@ -165,5 +187,127 @@ pub async fn unload_model(state: State<'_, AppState>, handle_id: u64) -> CmdResu
 
 #[tauri::command]
 pub fn list_loaded_models(state: State<'_, AppState>) -> CmdResult<Vec<ModelInfo>> {
-    Ok(state.orchestrator.loaded_models())
+    let mut list = state.orchestrator.loaded_models();
+    let mesh_sessions = state
+        .mesh_peer_connections
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    for session in mesh_sessions.values() {
+        list.push(ModelInfo {
+            handle_id: session.handle_id,
+            model_path: format!("Mesh: {} ({})", session.model_name, session.peer_addr),
+            engine: hivebear_core::types::InferenceEngine::Mesh,
+            context_length: 4096,
+            gpu_layers: None,
+        });
+    }
+    Ok(list)
+}
+
+async fn stream_mesh_peer_chat(
+    state: &AppState,
+    window: tauri::WebviewWindow,
+    session: &crate::state::MeshPeerSession,
+    messages: Vec<ChatMessage>,
+    temperature: Option<f32>,
+    max_tokens: Option<u32>,
+) -> CmdResult<String> {
+    use std::sync::Arc;
+    use tauri::Emitter;
+
+    let identity_path = state.paths.data_dir.join("node_identity.key");
+    let identity = hivebear_mesh::NodeIdentity::load_or_generate(&identity_path)
+        .unwrap_or_else(|_| hivebear_mesh::NodeIdentity::generate());
+    let security_mode = hivebear_mesh::MeshSecurityMode::default();
+    let transport: Arc<dyn hivebear_mesh::transport::MeshTransport> =
+        Arc::new(hivebear_mesh::transport::quic::QuicTransport::new(
+            identity.node_id.clone(),
+            security_mode,
+            None,
+        ));
+
+    let peer_id = transport.connect(session.peer_addr).await.map_err(|e| {
+        format!(
+            "Failed to connect to mesh peer at {}: {e}",
+            session.peer_addr
+        )
+    })?;
+
+    let session_id = uuid::Uuid::new_v4();
+    let messages_json =
+        serde_json::to_string(&messages).map_err(|e| format!("Serialization error: {e}"))?;
+
+    let req_msg = hivebear_mesh::transport::protocol::MeshMessage::InferenceRequest {
+        session_id,
+        model_id: session.model_name.clone(),
+        messages_json,
+        max_tokens: max_tokens.unwrap_or(2048),
+        temperature: temperature.unwrap_or(0.7),
+        top_p: 0.9,
+    };
+
+    transport
+        .send(&peer_id, req_msg)
+        .await
+        .map_err(|e| format!("Failed to send inference request to peer: {e}"))?;
+
+    let mut full_text = String::new();
+    let mut stream_error: Option<String> = None;
+
+    loop {
+        match transport.recv().await {
+            Ok((
+                _from,
+                hivebear_mesh::transport::protocol::MeshMessage::InferenceToken {
+                    text,
+                    is_done,
+                    ..
+                },
+            )) => {
+                if is_done {
+                    break;
+                }
+                full_text.push_str(&text);
+                let _ = window.emit("chat-token", &text);
+            }
+            Ok((
+                _from,
+                hivebear_mesh::transport::protocol::MeshMessage::InferenceComplete {
+                    error, ..
+                },
+            )) => {
+                if let Some(err) = error {
+                    let _ = window.emit("chat-error", &err);
+                    stream_error = Some(err);
+                }
+                break;
+            }
+            Ok((_from, hivebear_mesh::transport::protocol::MeshMessage::Error { message, .. })) => {
+                let _ = window.emit("chat-error", &message);
+                stream_error = Some(message);
+                break;
+            }
+            Err(e) => {
+                let err_str = e.to_string();
+                let _ = window.emit("chat-error", &err_str);
+                stream_error = Some(err_str);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    let _ = window.emit("chat-done", ());
+
+    if full_text.trim().is_empty() {
+        return Err(match stream_error {
+            Some(err) => err,
+            None => format!(
+                "The remote mesh peer ({}) returned no output. Verify that the model is loaded on the peer.",
+                session.peer_addr
+            ),
+        });
+    }
+
+    Ok(full_text)
 }

@@ -8,7 +8,8 @@ import ChatInput from "../components/ChatInput";
 import ConversationDrawer from "../components/ConversationDrawer";
 import { DEFAULT_CHAT_PARAMS, type ChatParams } from "../components/ChatParamsPanel";
 import type { DisplayMessage } from "../hooks/useInference";
-import { PanelLeft, Plus, Loader, Sparkles } from "lucide-react";
+import { PanelLeft, Plus, Loader, Sparkles, Globe } from "lucide-react";
+import { connectMeshPeer } from "../lib/invoke";
 import { EmptyState } from "../components/ui";
 
 export default function Chat() {
@@ -22,6 +23,29 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [chatParams, setChatParams] = useState<ChatParams>({ ...DEFAULT_CHAT_PARAMS });
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Mesh PC connection state
+  const [showMeshModal, setShowMeshModal] = useState(false);
+  const [meshPeerInput, setMeshPeerInput] = useState("192.168.0.4:7878");
+  const [meshModelName, setMeshModelName] = useState("PC Remote Model");
+  const [meshConnecting, setMeshConnecting] = useState(false);
+  const [meshError, setMeshError] = useState<string | null>(null);
+
+  const handleConnectMesh = useCallback(async () => {
+    if (!meshPeerInput.trim()) return;
+    setMeshConnecting(true);
+    setMeshError(null);
+    try {
+      const res = await connectMeshPeer(meshPeerInput.trim(), meshModelName.trim() || undefined);
+      setActiveHandleId(res.handle_id);
+      await refreshLoaded();
+      setShowMeshModal(false);
+    } catch (err: any) {
+      setMeshError(typeof err === "string" ? err : err?.message || "Error al conectar al nodo Mesh");
+    } finally {
+      setMeshConnecting(false);
+    }
+  }, [meshPeerInput, meshModelName, refreshLoaded]);
 
   // Conversation drawer (open by default like ChatGPT)
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -209,6 +233,14 @@ export default function Chat() {
             </h1>
           </div>
           <button
+            onClick={() => setShowMeshModal(true)}
+            className="interactive-hover flex items-center gap-1 rounded-[var(--radius-md)] border border-paw-500/30 bg-paw-500/10 px-2 py-1 text-xs text-paw-400 hover:bg-paw-500/20"
+            title="Conectar a PC por Mesh"
+          >
+            <Globe size={13} />
+            <span className="hidden sm:inline">Conectar a PC</span>
+          </button>
+          <button
             onClick={handleNewChat}
             className="interactive-hover rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
             title="New chat"
@@ -254,6 +286,15 @@ export default function Chat() {
                 <p className="text-xs text-text-muted">Loading model… this can take a minute.</p>
               )}
               {loadError && <p className="text-xs text-danger">{loadError}</p>}
+              <div className="mt-4 flex flex-col items-center gap-2">
+                <span className="text-xs text-text-muted">¿Tu modelo está corriendo en la PC?</span>
+                <button
+                  onClick={() => setShowMeshModal(true)}
+                  className="interactive-hover press-scale flex items-center gap-1.5 rounded-[var(--radius-md)] border border-paw-500/40 bg-paw-500/10 px-3 py-1.5 text-xs font-medium text-paw-400 hover:bg-paw-500/20"
+                >
+                  <Globe size={13} /> Conectar a PC vía Mesh P2P
+                </button>
+              </div>
             </EmptyState>
           </div>
         ) : messages.length === 0 ? (
@@ -368,6 +409,65 @@ export default function Chat() {
         />
       )}
       </div>
+
+      {showMeshModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[var(--radius-lg)] border border-border bg-surface-raised p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-text-primary flex items-center gap-2">
+              <Globe size={18} className="text-paw-400" /> Conectar a PC por Mesh P2P
+            </h3>
+            <p className="mt-1 text-xs text-text-muted">
+              Usa el modelo ejecutándose en tu PC sin descargar nada ni consumir RAM en el móvil.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-[11px] font-medium text-text-secondary">Dirección IP y Puerto del Nodo PC</label>
+                <input
+                  type="text"
+                  value={meshPeerInput}
+                  onChange={(e) => setMeshPeerInput(e.target.value)}
+                  placeholder="ej. 192.168.0.4:7878"
+                  className="mt-1 w-full rounded-[var(--radius-md)] border border-border bg-surface-overlay px-3 py-2 text-xs text-text-primary focus:border-paw-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-medium text-text-secondary">Nombre o Identificador del Modelo</label>
+                <input
+                  type="text"
+                  value={meshModelName}
+                  onChange={(e) => setMeshModelName(e.target.value)}
+                  placeholder="ej. DeepSeek-R1 o Llama-3.3"
+                  className="mt-1 w-full rounded-[var(--radius-md)] border border-border bg-surface-overlay px-3 py-2 text-xs text-text-primary focus:border-paw-500 focus:outline-none"
+                />
+              </div>
+
+              {meshError && (
+                <p className="text-xs text-danger">{meshError}</p>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                disabled={meshConnecting}
+                onClick={() => setShowMeshModal(false)}
+                className="rounded-[var(--radius-md)] px-3 py-1.5 text-xs text-text-muted hover:bg-surface-overlay"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={meshConnecting || !meshPeerInput.trim()}
+                onClick={handleConnectMesh}
+                className="flex items-center gap-1.5 rounded-[var(--radius-md)] bg-paw-500 px-4 py-1.5 text-xs font-medium text-black hover:bg-paw-400 disabled:opacity-50"
+              >
+                {meshConnecting ? <Loader size={12} className="animate-spin" /> : <Globe size={12} />}
+                {meshConnecting ? "Conectando…" : "Conectar y Chatear"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

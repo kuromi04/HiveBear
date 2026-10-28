@@ -182,11 +182,22 @@ jobs:
           done
           cd ..
 
+          echo "=== Found Signed Android Build Artifacts ==="
+          ls -lh android-artifacts/
+
+      - name: Build Standalone hivebear CLI for Termux (aarch64-linux-android)
+        env:
+          NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+        run: |
+          export NDK_HOME="${NDK_HOME:-${ANDROID_NDK_HOME:-$ANDROID_NDK_ROOT}}"
+          TC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export PATH="$TC:$PATH"
+          export CC_aarch64_linux_android="$TC/aarch64-linux-android24-clang"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TC/aarch64-linux-android24-clang"
+          export AR_aarch64_linux_android="$TC/llvm-ar"
           echo "=== Building Standalone hivebear CLI for Termux (aarch64-linux-android) ==="
           cargo build --release --target aarch64-linux-android -p hivebear-cli --bin hivebear --no-default-features --features "api,cloud,candle"
           tar -czf android-artifacts/hivebear-aarch64-linux-android.tar.gz -C target/aarch64-linux-android/release hivebear
-
-          echo "=== Found Signed Android Build Artifacts ==="
           ls -lh android-artifacts/
 
       - name: Upload APK artifacts

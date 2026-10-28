@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { getMeshStatus, saveMeshConfig, getMeshConfig, getMeshConnectionStatus, joinMesh, leaveMesh } from "../lib/invoke";
+import { getMeshStatus, saveMeshConfig, getMeshConfig, getMeshConnectionStatus, joinMesh, leaveMesh, connectMeshPeer } from "../lib/invoke";
+import { useNavigate } from "react-router-dom";
 import type { MeshConnectionStatus } from "../lib/invoke";
 import type { MeshStatus as MeshStatusType } from "../types";
 import { Link } from "react-router-dom";
@@ -261,6 +262,7 @@ interface CoordinatorNode {
 }
 
 function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string }) {
+  const navigate = useNavigate();
   const [nodes, setNodes] = useState<CoordinatorNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -325,6 +327,7 @@ function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string })
                 <th className="pb-2 font-medium">RAM / VRAM</th>
                 <th className="pb-2 font-medium text-right">Karma Balance</th>
                 <th className="pb-2 font-medium text-right">Priority Tier</th>
+                <th className="pb-2 font-medium text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30 font-mono">
@@ -354,6 +357,21 @@ function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string })
                       ].join(" ")}>
                         {tier}
                       </span>
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await connectMeshPeer(node.addr, "Remote PC");
+                            navigate("/chat");
+                          } catch (e) {
+                            console.error(e);
+                          }
+                        }}
+                        className="rounded-[var(--radius-md)] border border-paw-500/30 bg-paw-500/10 px-2 py-1 text-[11px] font-medium text-paw-400 hover:bg-paw-500/20"
+                      >
+                        Chatear
+                      </button>
                     </td>
                   </tr>
                 );

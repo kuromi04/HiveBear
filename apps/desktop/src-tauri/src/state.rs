@@ -3,8 +3,17 @@ use hivebear_inference::Orchestrator;
 use hivebear_mesh::MeshNode;
 use hivebear_persistence::ChatDatabase;
 use hivebear_registry::Registry;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+
+/// An active connection session to a remote mesh peer for inference offloading.
+#[derive(Debug, Clone)]
+pub struct MeshPeerSession {
+    pub handle_id: u64,
+    pub peer_addr: std::net::SocketAddr,
+    pub model_name: String,
+}
 use tracing::info;
 
 /// Shared application state managed by Tauri.
@@ -17,6 +26,7 @@ pub struct AppState {
     pub paths: AppPaths,
     pub http_client: reqwest::Client,
     pub mesh_node: Mutex<Option<Arc<MeshNode>>>,
+    pub mesh_peer_connections: Mutex<HashMap<u64, MeshPeerSession>>,
 }
 
 impl AppState {
@@ -56,6 +66,7 @@ impl AppState {
             paths,
             http_client: reqwest::Client::new(),
             mesh_node: Mutex::new(None),
+            mesh_peer_connections: Mutex::new(HashMap::new()),
         }
     }
 

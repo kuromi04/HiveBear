@@ -181,6 +181,10 @@ export function getMeshConnectionStatus(): Promise<MeshConnectionStatus> {
   return invoke("get_mesh_connection_status", undefined, { silent: true });
 }
 
+export function connectMeshPeer(peerAddr: string, modelName?: string): Promise<LoadedModel> {
+  return invoke("connect_mesh_peer", { peerAddr, modelName });
+}
+
 // ── Chat Persistence ─────────────────────────────────────────────
 
 export function listConversations(): Promise<Conversation[]> {

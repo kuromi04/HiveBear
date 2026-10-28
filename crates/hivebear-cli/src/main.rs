@@ -2909,6 +2909,7 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
     println!("{}", "Contribution stopped. Thank you!".green());
 }
 
+#[cfg(not(target_os = "android"))]
 async fn cmd_update(check_only: bool) {
     use self_update::backends::github::Update;
 
@@ -2997,6 +2998,15 @@ async fn cmd_update(check_only: bool) {
             std::process::exit(1);
         }
     }
+}
+
+#[cfg(target_os = "android")]
+async fn cmd_update(_check_only: bool) {
+    let current_version = env!("CARGO_PKG_VERSION");
+    println!("\n{}", "  HiveBear Update  ".bold().white().on_blue());
+    println!();
+    println!("Current version: {}", current_version.bold());
+    println!("On Android/Termux, updates are managed via git or TermuxHiveBear menu (option 11).");
 }
 
 async fn cmd_uninstall(purge: bool, yes: bool) {

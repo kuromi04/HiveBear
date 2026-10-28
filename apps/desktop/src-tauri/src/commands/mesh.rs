@@ -134,3 +134,54 @@ pub fn get_mesh_connection_status(state: State<'_, AppState>) -> CmdResult<MeshC
         }),
     }
 }
+
+/// Connect directly to a mesh peer node to offload inference.
+#[tauri::command]
+pub async fn connect_mesh_peer(
+    state: State<'_, AppState>,
+    peer_addr: String,
+    model_name: Option<String>,
+) -> CmdResult<crate::commands::inference::LoadedModel> {
+    let addr_str = if peer_addr.contains(':') {
+        peer_addr.clone()
+    } else {
+        format!("{peer_addr}:7878")
+    };
+
+    let sa: std::net::SocketAddr = match addr_str.parse() {
+        Ok(a) => a,
+        Err(_) => match tokio::net::lookup_host(&addr_str).await {
+            Ok(mut addrs) => match addrs.next() {
+                Some(a) => a,
+                None => return Err(format!("Could not resolve peer address '{}'", peer_addr)),
+            },
+            Err(e) => return Err(format!("Invalid peer address '{}': {e}", peer_addr)),
+        },
+    };
+
+    let handle_id = 0x8000_0000_0000_0000 | (rand::random::<u32>() as u64);
+    let name = model_name
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "Remote Model".into());
+
+    let session = crate::state::MeshPeerSession {
+        handle_id,
+        peer_addr: sa,
+        model_name: name.clone(),
+    };
+
+    {
+        let mut sessions = state
+            .mesh_peer_connections
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        sessions.insert(handle_id, session);
+    }
+
+    Ok(crate::commands::inference::LoadedModel {
+        handle_id,
+        model_path: format!("Mesh: {} ({})", name, sa),
+        engine: "Mesh".into(),
+    })
+}

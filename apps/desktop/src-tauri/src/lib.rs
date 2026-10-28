@@ -100,6 +100,7 @@ pub fn run() {
             commands::mesh::join_mesh,
             commands::mesh::leave_mesh,
             commands::mesh::get_mesh_connection_status,
+            commands::mesh::connect_mesh_peer,
             commands::chat::list_conversations,
             commands::chat::create_conversation,
             commands::chat::get_conversation_messages,
