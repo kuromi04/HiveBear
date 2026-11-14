@@ -2569,6 +2569,7 @@ dependencies = [
 name = "hivebear-desktop"
 version = "0.2.14"
 dependencies = [
+ "async-trait",
  "ed25519-dalek",
  "futures",
  "hex",
@@ -2587,6 +2588,7 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-updater",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "uuid",

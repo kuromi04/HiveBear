@@ -49,9 +49,9 @@ export default function ModelBrowser() {
 
   return (
     <Surface>
-      <div className="flex h-full flex-col -m-6 -mt-6">
-        <div className="shrink-0 space-y-4 border-b border-border p-6 pb-4">
-          <h1 className="text-xl font-semibold">Models</h1>
+      <div className="flex h-full flex-col -m-4 sm:-m-6">
+        <div className="shrink-0 space-y-3 border-b border-border p-4 pb-3 sm:space-y-4 sm:p-6 sm:pb-4">
+          <h1 className="text-lg font-semibold sm:text-xl">Models</h1>
 
           {/* Tabs */}
           <div className="flex gap-1 rounded-[var(--radius-md)] bg-surface-overlay p-0.5">
@@ -69,13 +69,13 @@ export default function ModelBrowser() {
           {/* Search */}
           {tab === "search" && (
             <form onSubmit={handleSearch} className="flex gap-2">
-              <div className="relative flex-1">
+              <div className="relative flex-1 min-w-0">
                 <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                 <input type="text" value={query} onChange={(e) => handleQueryChange(e.target.value)}
-                  placeholder="Search models (e.g. llama, codestral, phi)..."
+                  placeholder="Search models (e.g. qwen, smollm2, llama)..."
                   className="w-full rounded-[var(--radius-md)] border border-border bg-surface py-2 pl-9 pr-3 text-sm outline-none placeholder:text-text-muted focus:border-paw-500 focus:ring-2 focus:ring-paw-500/20" />
               </div>
-              <button type="submit" className="interactive-hover press-scale rounded-[var(--radius-md)] bg-paw-500 px-4 py-2 text-sm font-medium text-white hover:bg-paw-600">
+              <button type="submit" className="interactive-hover press-scale shrink-0 rounded-[var(--radius-md)] bg-paw-500 px-3.5 py-2 text-sm font-medium text-white hover:bg-paw-600 sm:px-4">
                 Search
               </button>
             </form>
@@ -84,7 +84,7 @@ export default function ModelBrowser() {
 
         {/* Download progress & error handling */}
         {(installing || installError) && (
-          <div className="shrink-0 px-6 pt-4">
+          <div className="shrink-0 px-4 pt-3 sm:px-6 sm:pt-4">
             <DownloadProgress 
               modelId={installing || "Model"} 
               progress={progress} 
@@ -96,13 +96,13 @@ export default function ModelBrowser() {
         )}
 
         {searchError && (
-          <div className="mx-6 mt-4 rounded-[var(--radius-md)] border border-danger/30 bg-danger/10 px-4 py-2 text-sm text-danger">
+          <div className="mx-4 mt-3 rounded-[var(--radius-md)] border border-danger/30 bg-danger/10 px-4 py-2 text-sm text-danger sm:mx-6 sm:mt-4">
             {searchError}
           </div>
         )}
 
         {/* Results */}
-        <div className="flex-1 overflow-y-auto p-6 pt-4">
+        <div className="flex-1 overflow-y-auto p-4 pt-3 sm:p-6 sm:pt-4">
           {tab === "search" ? (
             searching ? (
               <p className="text-sm text-text-muted">Searching...</p>
@@ -114,7 +114,7 @@ export default function ModelBrowser() {
               >
                 {!query && (
                   <div className="mt-2 flex flex-wrap justify-center gap-2">
-                    {["llama", "mistral", "phi", "codestral", "qwen"].map((q) => (
+                    {["qwen", "smollm2", "llama", "tinyllama", "phi"].map((q) => (
                       <button
                         key={q}
                         onClick={() => { setQuery(q); search(q); }}

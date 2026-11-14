@@ -124,7 +124,10 @@ async fn scan_model_dir(root: &Path) -> DirScan {
 
             if let Some(partial) = name.strip_suffix(".partial") {
                 scan.partials.push(join_relative(&prefix, partial));
-            } else if name.to_lowercase().ends_with(".gguf") {
+            } else if name.to_lowercase().ends_with(".gguf")
+                && !name.to_lowercase().contains("mmproj")
+                && !name.to_lowercase().contains("imatrix")
+            {
                 let size_bytes = entry.metadata().await.map(|m| m.len()).unwrap_or(0);
                 scan.ggufs.push(GgufFile {
                     path: entry.path(),
@@ -313,6 +316,7 @@ pub struct Registry {
     hf: HuggingFaceSource,
     ollama: OllamaSource,
     index: Arc<Mutex<LocalIndex>>,
+    search_cache: Arc<Mutex<std::collections::HashMap<String, String>>>,
     downloader: DownloadManager,
     models_dir: PathBuf,
 }
@@ -345,6 +349,7 @@ impl Registry {
             hf: HuggingFaceSource::new(),
             ollama: OllamaSource::new(),
             index: Arc::new(Mutex::new(index)),
+            search_cache: Arc::new(Mutex::new(std::collections::HashMap::new())),
             downloader: DownloadManager::new(models_dir.clone()),
             models_dir,
         };
@@ -475,6 +480,7 @@ impl Registry {
 
         let mut results: Vec<SearchResult> = Vec::new();
         let index = self.index.lock().await;
+        let mut cache = self.search_cache.lock().await;
 
         // Add local results first
         for meta in local_results {
@@ -486,13 +492,77 @@ impl Registry {
             });
         }
 
+        // Add curated builtin models matching query so verified models always appear
+        let query_lower = query.trim().to_lowercase();
+        for entry in hivebear_core::recommender::model_db::builtin_models() {
+            if !query_lower.is_empty()
+                && !entry.id.to_lowercase().contains(&query_lower)
+                && !entry.name.to_lowercase().contains(&query_lower)
+                && !entry
+                    .huggingface_id
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(&query_lower)
+            {
+                continue;
+            }
+            if results.iter().any(|r| {
+                r.metadata.id == entry.id
+                    || (entry.huggingface_id.is_some()
+                        && r.metadata.huggingface_id == entry.huggingface_id)
+            }) {
+                continue;
+            }
+            if let Some(ref repo_id) = entry.huggingface_id {
+                cache.insert(entry.id.clone(), repo_id.clone());
+            }
+            let installed_meta = index.find(&entry.id).and_then(|m| m.installed.clone());
+            let meta = ModelMetadata {
+                id: entry.id.clone(),
+                name: entry.name.clone(),
+                params_billions: entry.params_billions,
+                formats: entry.formats.clone(),
+                context_length: entry.context_length,
+                quality_score: entry.quality_score,
+                category: entry.category,
+                source: ModelSource::HuggingFace {
+                    repo_id: entry.huggingface_id.clone().unwrap_or_default(),
+                    revision: None,
+                },
+                huggingface_id: entry.huggingface_id.clone(),
+                installed: installed_meta.clone(),
+                description: None,
+                tags: vec!["curated".into(), "gguf".into()],
+                downloads_count: Some(100_000),
+                likes_count: None,
+                last_modified: None,
+            };
+            let compatibility = hw_profile.map(|hw| compute_compatibility(hw, &meta));
+            results.push(SearchResult {
+                is_installed: installed_meta.is_some(),
+                compatibility_score: compatibility,
+                metadata: meta,
+            });
+        }
+
         // Add HF results, avoiding duplicates
         for meta in hf_results {
-            let already_listed = results.iter().any(|r| r.metadata.id == meta.id);
+            if let Some(ref repo_id) = meta.huggingface_id {
+                cache.insert(meta.id.clone(), repo_id.clone());
+            }
+            let already_listed = results.iter().any(|r| {
+                r.metadata.id == meta.id
+                    || (meta.huggingface_id.is_some()
+                        && r.metadata.huggingface_id == meta.huggingface_id)
+            });
             if already_listed {
                 continue;
             }
-            let is_installed = index.find(&meta.id).is_some();
+            let is_installed = index
+                .find(&meta.id)
+                .and_then(|m| m.installed.as_ref())
+                .is_some();
             let compatibility = hw_profile.map(|hw| compute_compatibility(hw, &meta));
             results.push(SearchResult {
                 is_installed,
@@ -758,25 +828,29 @@ impl Registry {
             return Some(tokenizer_path);
         }
 
-        let repo_id = {
+        let mut repo_id = {
             let index = self.index.lock().await;
             index
                 .find(model_id)
                 .and_then(|meta| meta.huggingface_id.clone())
         };
-        let Some(repo_id) = repo_id else {
-            tracing::warn!(
-                "{} is missing tokenizer.json and has no known HuggingFace repo to fetch it from",
-                model_file.display()
-            );
-            return None;
-        };
+        if repo_id.is_none() {
+            let cache = self.search_cache.lock().await;
+            repo_id = cache.get(model_id).cloned();
+        }
+        if repo_id.is_none() {
+            repo_id = hivebear_core::recommender::model_db::builtin_models()
+                .into_iter()
+                .find(|e| e.id == model_id)
+                .and_then(|e| e.huggingface_id);
+        }
+        let repo_str = repo_id.unwrap_or_default();
 
         tracing::info!(
             "{} is missing tokenizer.json; fetching it for the Candle backend",
             model_file.display()
         );
-        self.fetch_tokenizer(&repo_id, model_dir, model_id).await
+        self.fetch_tokenizer(&repo_str, model_dir, model_id).await
     }
 
     /// Fetch `<repo>/tokenizer.json` into `model_dir`, falling back to the repo's
@@ -797,22 +871,29 @@ impl Registry {
 
         let mut candidate_repos: Vec<String> = Vec::new();
 
-        // 1. Try the repo itself
-        candidate_repos.push(repo_id.to_string());
+        if !repo_id.is_empty() {
+            // 1. Try the repo itself
+            candidate_repos.push(repo_id.to_string());
 
-        // 2. Base model reported by HuggingFace tags
-        if let Some(base_repo) = self.base_model_repo(repo_id).await {
-            // Meta-Llama models are gated (return 401 Unauthorized without auth).
-            // Unsloth provides exact ungated mirrors of the official tokenizers.
-            if base_repo.starts_with("meta-llama/") {
-                candidate_repos.push(base_repo.replace("meta-llama/", "unsloth/"));
+            // 2. Base model reported by HuggingFace tags
+            if let Some(base_repo) = self.base_model_repo(repo_id).await {
+                // Meta-Llama models are gated (return 401 Unauthorized without auth).
+                // Unsloth provides exact ungated mirrors of the official tokenizers.
+                if base_repo.starts_with("meta-llama/") {
+                    candidate_repos.push(base_repo.replace("meta-llama/", "unsloth/"));
+                }
+                candidate_repos.push(base_repo);
             }
-            candidate_repos.push(base_repo);
         }
 
         // 3. Known canonical tokenizers for supported architecture families
         let combined = format!("{repo_id} {model_id}").to_lowercase();
-        if combined.contains("llama-3.2-1b") {
+        if combined.contains("smollm2-360m") || combined.contains("smollm2") {
+            candidate_repos.push("HuggingFaceTB/SmolLM2-360M-Instruct".to_string());
+            candidate_repos.push("HuggingFaceTB/SmolLM2-1.7B-Instruct".to_string());
+        } else if combined.contains("tinyllama") {
+            candidate_repos.push("TinyLlama/TinyLlama-1.1B-Chat-v1.0".to_string());
+        } else if combined.contains("llama-3.2-1b") {
             candidate_repos.push("unsloth/Llama-3.2-1B-Instruct".to_string());
         } else if combined.contains("llama-3.2-3b") {
             candidate_repos.push("unsloth/Llama-3.2-3B-Instruct".to_string());
@@ -822,6 +903,8 @@ impl Registry {
             // All Llama 3/3.1/3.2 models share the exact same 128,256 BPE tokenizer vocabulary
             candidate_repos.push("unsloth/Llama-3.2-1B-Instruct".to_string());
             candidate_repos.push("unsloth/Meta-Llama-3.1-8B-Instruct".to_string());
+        } else if combined.contains("phi-3") || combined.contains("phi3") {
+            candidate_repos.push("microsoft/Phi-3-mini-4k-instruct".to_string());
         } else if combined.contains("mistral") {
             candidate_repos.push("unsloth/mistral-7b-instruct-v0.2".to_string());
             candidate_repos.push("mistralai/Mistral-7B-v0.1".to_string());
@@ -830,6 +913,7 @@ impl Registry {
             candidate_repos.push("Qwen/Qwen2.5-1.5B-Instruct".to_string());
             candidate_repos.push("Qwen/Qwen2.5-7B-Instruct".to_string());
         } else if combined.contains("deepseek") {
+            candidate_repos.push("deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B".to_string());
             candidate_repos.push("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B".to_string());
         }
 
@@ -1039,7 +1123,7 @@ impl Registry {
             return Ok(model_id.to_string());
         }
 
-        // Check if we have a known HF ID from the builtin DB or local index
+        // Check if we have a known HF ID from the local index
         let index = self.index.lock().await;
         if let Some(meta) = index.find(model_id) {
             if let Some(ref hf_id) = meta.huggingface_id {
@@ -1048,9 +1132,25 @@ impl Registry {
         }
         drop(index);
 
-        // Check builtin model database
+        // Check search cache from recent searches
+        {
+            let cache = self.search_cache.lock().await;
+            if let Some(hf_id) = cache.get(model_id) {
+                return Ok(hf_id.clone());
+            }
+        }
+
+        // Check builtin model database (by id or repo slug)
+        let id_lower = model_id.to_lowercase();
         let builtins = hivebear_core::recommender::model_db::builtin_models();
-        if let Some(entry) = builtins.iter().find(|e| e.id == model_id) {
+        if let Some(entry) = builtins.iter().find(|e| {
+            e.id == model_id
+                || e.huggingface_id
+                    .as_deref()
+                    .and_then(|hf| hf.rsplit('/').next())
+                    .map(|slug| slug.to_lowercase() == id_lower)
+                    .unwrap_or(false)
+        }) {
             if let Some(ref hf_id) = entry.huggingface_id {
                 return Ok(hf_id.clone());
             }
@@ -1089,16 +1189,29 @@ fn base_model_from_tags(json: &serde_json::Value) -> Option<String> {
 /// Compute a simple compatibility score based on hardware and model size.
 fn compute_compatibility(hw: &HardwareProfile, meta: &ModelMetadata) -> f64 {
     // On mobile devices (Android/iOS), Candle is the only available inference engine.
-    // Candle's quantized_llama only supports the Llama/Mistral GGUF architecture.
-    // Models with other architectures (e.g. Qwen2, Gemma, Phi3) cannot run on-device.
+    // Candle supports Llama/Mistral/SmolLM2/TinyLlama, Qwen2/Qwen2.5/DeepSeek-Qwen, and Phi3 GGUF architectures.
     let is_mobile = hw.platform.is_mobile || hw.platform.os == "android" || hw.platform.os == "ios";
     if is_mobile {
-        // Enforce parameter limits on mobile: models > 3.5B (like Llama-3-8B or Mistral-7B)
+        // Enforce parameter limits on mobile: models with unknown size (<= 0.0) or > 3.5B
         // should never be scored as compatible on phones/tablets due to RAM limits and Android LMK.
-        if meta.params_billions > 3.5 {
+        if meta.params_billions <= 0.0 || meta.params_billions > 3.5 {
             return 0.0;
         }
-        if hw.memory.available_bytes <= 4 * 1024 * 1024 * 1024 && meta.params_billions > 1.5 {
+        if hw.memory.available_bytes <= 4 * 1024 * 1024 * 1024 && meta.params_billions > 1.7 {
+            return 0.0;
+        }
+
+        let id_lower = meta.id.to_lowercase();
+        let name_lower = meta.name.to_lowercase();
+        // Exclude multimodal/vision/embedding repos on mobile Candle
+        if id_lower.contains("llava")
+            || id_lower.contains("-vl")
+            || id_lower.contains("vision")
+            || id_lower.contains("mmproj")
+            || id_lower.contains("embed")
+            || name_lower.contains("vision")
+            || name_lower.contains("-vl")
+        {
             return 0.0;
         }
 
@@ -1109,12 +1222,16 @@ fn compute_compatibility(hw: &HardwareProfile, meta: &ModelMetadata) -> f64 {
             })
             .map(|e| e.candle_compatible)
             .unwrap_or_else(|| {
-                let id_lower = meta.id.to_lowercase();
-                let name_lower = meta.name.to_lowercase();
-                (id_lower.contains("llama") || id_lower.contains("mistral"))
+                (id_lower.contains("llama")
+                    || id_lower.contains("mistral")
+                    || id_lower.contains("qwen")
+                    || id_lower.contains("smollm")
+                    || id_lower.contains("tinyllama")
+                    || id_lower.contains("phi-3")
+                    || id_lower.contains("phi3")
+                    || (id_lower.contains("deepseek") && id_lower.contains("qwen")))
                     && !id_lower.contains("mixtral")
-                    && !id_lower.contains("qwen")
-                    && !name_lower.contains("qwen")
+                    && !id_lower.contains("gemma")
             });
 
         if !is_compatible {
@@ -1300,9 +1417,13 @@ mod tests {
         let meta_8b = make_meta("llama-3.1-8b-instruct", "Llama 3.1 8B Instruct", 8.03);
         assert_eq!(compute_compatibility(&hw_8gb, &meta_8b), 0.0);
 
-        // Qwen model (incompatible with Candle on mobile): must be 0.0
+        // Qwen 1.5B model (now supported natively by Candle quantized_qwen2!): compatible
         let meta_qwen = make_meta("qwen-2.5-1.5b-instruct", "Qwen 2.5 1.5B Instruct", 1.54);
-        assert_eq!(compute_compatibility(&hw_8gb, &meta_qwen), 0.0);
+        assert!(compute_compatibility(&hw_8gb, &meta_qwen) > 0.0);
+
+        // Gemma model (unsupported architecture on mobile Candle): must be 0.0
+        let meta_gemma = make_meta("gemma-2-2b-it", "Gemma 2 2B IT", 2.0);
+        assert_eq!(compute_compatibility(&hw_8gb, &meta_gemma), 0.0);
 
         // 3B model on <= 4GB RAM phone: must be 0.0
         let hw_3gb = make_hw(true, "android", 3 * 1024 * 1024 * 1024);

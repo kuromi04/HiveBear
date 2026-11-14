@@ -64,18 +64,18 @@ export default function ChatInput({
   const showModelSelector = loadedModels.length > 1;
 
   return (
-    <div className="shrink-0 border-t border-border px-6 py-4">
+    <div className="shrink-0 border-t border-border px-3 py-2.5 sm:px-6 sm:py-4">
       <div className="mx-auto max-w-2xl">
         {/* Model badge + params row */}
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             {modelName && (
-              <div className="relative" ref={modelMenuRef}>
+              <div className="relative min-w-0" ref={modelMenuRef}>
                 {showModelSelector ? (
                   <select
                     value={activeHandleId ?? ""}
                     onChange={(e) => onModelChange(Number(e.target.value))}
-                    className="interactive-hover appearance-none rounded-[var(--radius-sm)] border border-border bg-surface-raised px-2 py-1 pr-6 text-[11px] font-medium text-text-secondary outline-none hover:border-paw-500/30 hover:text-text-primary focus:border-paw-500"
+                    className="interactive-hover max-w-[220px] truncate appearance-none rounded-[var(--radius-sm)] border border-border bg-surface-raised px-2 py-1 pr-6 text-[11px] font-medium text-text-secondary outline-none hover:border-paw-500/30 hover:text-text-primary focus:border-paw-500 sm:max-w-none"
                   >
                     {loadedModels.map((m) => (
                       <option key={m.handle_id} value={m.handle_id}>
@@ -84,15 +84,15 @@ export default function ChatInput({
                     ))}
                   </select>
                 ) : (
-                  <span className="flex items-center gap-1 rounded-[var(--radius-sm)] bg-surface-raised px-2 py-1 text-[11px] font-medium text-text-secondary">
-                    <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                    {modelName}
+                  <span className="flex max-w-[220px] items-center gap-1 truncate rounded-[var(--radius-sm)] bg-surface-raised px-2 py-1 text-[11px] font-medium text-text-secondary sm:max-w-none">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
+                    <span className="truncate">{modelName}</span>
                   </span>
                 )}
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <ChatParamsPanel params={chatParams} onChange={onChatParamsChange} />
           </div>
         </div>
@@ -107,11 +107,11 @@ export default function ChatInput({
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder="Message HiveBear..."
-            className="block w-full resize-none bg-transparent px-4 py-3 pr-14 text-sm text-text-primary outline-none placeholder:text-text-muted disabled:cursor-not-allowed disabled:opacity-50"
+            className="block w-full resize-none bg-transparent px-3.5 py-2.5 pr-12 text-sm text-text-primary outline-none placeholder:text-text-muted disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:py-3 sm:pr-14"
           />
 
           {/* Send / Stop button */}
-          <div className="absolute bottom-2 right-2">
+          <div className="absolute bottom-1.5 right-1.5 sm:bottom-2 sm:right-2">
             {streaming ? (
               <button
                 onClick={onStop}
@@ -134,7 +134,7 @@ export default function ChatInput({
         </div>
 
         {/* Keyboard hint */}
-        <div className="mt-1.5 text-center text-[10px] text-text-muted">
+        <div className="mt-1.5 hidden text-center text-[10px] text-text-muted sm:block">
           <kbd className="rounded border border-border bg-surface-overlay px-1 py-0.5 font-mono text-[9px]">Enter</kbd>
           {" to send, "}
           <kbd className="rounded border border-border bg-surface-overlay px-1 py-0.5 font-mono text-[9px]">Shift+Enter</kbd>

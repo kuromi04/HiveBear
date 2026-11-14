@@ -149,7 +149,10 @@ impl HuggingFaceSource {
             .siblings
             .unwrap_or_default()
             .into_iter()
-            .filter(|s| s.filename.ends_with(".gguf"))
+            .filter(|s| {
+                let lower = s.filename.to_lowercase();
+                lower.ends_with(".gguf") && !lower.contains("mmproj") && !lower.contains("imatrix")
+            })
             .map(|s| {
                 let quantization = parse_quantization_from_filename(&s.filename);
                 let download_url = format!(
@@ -243,9 +246,16 @@ fn extract_param_count(name: &str, tags: &[String]) -> f64 {
         ("7b", 7.0),
         ("2.7b", 2.7),
         ("3b", 3.0),
+        ("1.7b", 1.7),
         ("1.5b", 1.5),
+        ("1.1b", 1.1),
         ("2b", 2.0),
+        ("0.6b", 0.6),
         ("0.5b", 0.5),
+        ("500m", 0.5),
+        ("0.36b", 0.36),
+        ("360m", 0.36),
+        ("135m", 0.135),
         ("1b", 1.0),
     ];
 

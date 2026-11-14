@@ -40,9 +40,9 @@ export default function Layout() {
 
   if (isMobile) {
     return (
-      <div className="flex h-screen flex-col">
-        <main className="flex-1 overflow-y-auto overscroll-contain pb-[calc(56px+env(safe-area-inset-bottom))]">
-          <div key={location.pathname} className="animate-[page-enter] min-h-0">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-surface-primary">
+        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(56px+env(safe-area-inset-bottom))]">
+          <div key={location.pathname} className="animate-[page-enter] h-full min-h-0">
             <Outlet />
           </div>
         </main>
@@ -52,9 +52,9 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh w-full overflow-hidden">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <div key={location.pathname} className="animate-[page-enter] h-full">
           <Outlet />
         </div>

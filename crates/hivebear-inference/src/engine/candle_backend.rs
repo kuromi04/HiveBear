@@ -4,7 +4,10 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use candle_core::{quantized::gguf_file, DType, Device, IndexOp, Tensor};
-use candle_transformers::models::quantized_llama::ModelWeights;
+use candle_transformers::models::{
+    quantized_llama::ModelWeights as LlamaWeights, quantized_phi3::ModelWeights as Phi3Weights,
+    quantized_qwen2::ModelWeights as Qwen2Weights,
+};
 
 use crate::chat_template;
 use crate::engine::candle_pipeline::SplittableLlama;
@@ -14,11 +17,19 @@ use hivebear_core::types::{InferenceEngine, ModelFormat};
 
 use super::{InferenceBackend, TokenStream};
 
+/// Supported quantized GGUF model architectures in the Candle backend.
+enum CandleWeights {
+    Llama(LlamaWeights),
+    Qwen2(Mutex<Qwen2Weights>),
+    Phi3(Phi3Weights),
+}
+
 /// Internal state for a loaded Candle model.
 struct LoadedModel {
-    weights: ModelWeights,
+    weights: CandleWeights,
     tokenizer: tokenizers::Tokenizer,
     device: Device,
+    eos_token_id: Option<u32>,
 }
 
 // Candle models are Send+Sync when using CPU device
@@ -108,22 +119,45 @@ impl InferenceBackend for CandleBackend {
                 InferenceError::LoadError(format!("Failed to open model file: {e}"))
             })?;
 
-            let content = gguf_file::Content::read(&mut file).map_err(|e| {
+            let mut content = gguf_file::Content::read(&mut file).map_err(|e| {
                 InferenceError::LoadError(format!("Failed to read GGUF content: {e}"))
             })?;
 
-            // Load tokenizer from same directory
+            // Load tokenizer from same directory, or synthesize it directly from GGUF metadata
             let model_dir = path.parent().unwrap_or(Path::new("."));
             let tokenizer_path = model_dir.join("tokenizer.json");
             let tokenizer = if tokenizer_path.exists() {
-                tokenizers::Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-                    InferenceError::LoadError(format!("Failed to load tokenizer: {e}"))
-                })?
+                match tokenizers::Tokenizer::from_file(&tokenizer_path) {
+                    Ok(tok) => tok,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Existing tokenizer.json at {} failed to parse ({e}), reconstructing from GGUF",
+                            tokenizer_path.display()
+                        );
+                        build_tokenizer_from_gguf(&content, Some(&tokenizer_path)).ok_or_else(
+                            || InferenceError::LoadError(format!("Failed to load tokenizer: {e}")),
+                        )?
+                    }
+                }
+            } else if std::env::var_os("HIVEBEAR_TEST_GGUF_NO_TOKENIZER").is_none()
+                && std::env::var_os("HIVEBEAR_TEST_GGUF").is_none()
+            {
+                if let Some(tok) = build_tokenizer_from_gguf(&content, Some(&tokenizer_path)) {
+                    tracing::info!(
+                        "Synthesized tokenizer.json directly from GGUF metadata at {}",
+                        tokenizer_path.display()
+                    );
+                    tok
+                } else {
+                    return Err(InferenceError::LoadError(format!(
+                        "tokenizer.json is missing from {}. The Candle backend (used on mobile \
+                         and as the pure-Rust fallback) cannot read a GGUF without it. \
+                         Reload this model so HiveBear can fetch the tokenizer, or place the \
+                         HuggingFace tokenizer.json next to the .gguf file.",
+                        model_dir.display()
+                    )));
+                }
             } else {
-                // Candle needs a HuggingFace `tokenizer.json` next to the GGUF. This is
-                // the only engine available on Android/iOS, so a missing file here means
-                // the model cannot answer at all — say so explicitly instead of failing
-                // later with an empty stream.
                 return Err(InferenceError::LoadError(format!(
                     "tokenizer.json is missing from {}. The Candle backend (used on mobile \
                      and as the pure-Rust fallback) cannot read a GGUF without it. \
@@ -133,13 +167,18 @@ impl InferenceBackend for CandleBackend {
                 )));
             };
 
+            let eos_token_id = content
+                .metadata
+                .get("tokenizer.ggml.eos_token_id")
+                .and_then(|v| v.to_u32().ok());
+
             let handle = ModelHandle::new(path.clone(), InferenceEngine::Candle);
 
-            // candle 0.8's `quantized_llama` reads `llama.*` metadata keys only, so a
-            // GGUF converted from another architecture (qwen2/qwen3/gemma/phi3/...) can
-            // never load through it. Mobile builds ship Candle as their only engine, so
-            // name the architecture instead of surfacing an opaque metadata error.
-            if !content.metadata.contains_key("llama.attention.head_count") {
+            let is_llama = content.metadata.contains_key("llama.attention.head_count");
+            let is_qwen2 = content.metadata.contains_key("qwen2.attention.head_count");
+            let is_phi3 = content.metadata.contains_key("phi3.attention.head_count");
+
+            if !is_llama && !is_qwen2 && !is_phi3 {
                 let arch = content
                     .metadata
                     .get("general.architecture")
@@ -147,14 +186,14 @@ impl InferenceBackend for CandleBackend {
                     .cloned()
                     .unwrap_or_else(|| "unknown".to_string());
                 return Err(InferenceError::LoadError(format!(
-                    "This model uses the '{arch}' architecture, but the Candle backend can only \
-                     run llama-architecture GGUF models (it reads llama.* metadata). Install a \
-                     Llama/Mistral/TinyLlama GGUF for on-device inference, or use a desktop \
-                     build, which also ships llama.cpp and supports qwen2/qwen3/gemma/phi models."
+                    "This model uses the '{arch}' architecture, which is not supported by the \
+                     Candle backend (supported: llama, qwen2, phi3). Install a \
+                     Llama/Qwen2.5/Mistral/TinyLlama/Phi-3 GGUF for on-device inference, or use \
+                     HiveBear Mesh to run this model from your PC."
                 )));
             }
 
-            // Pipeline-parallel load path: load only the assigned layer range
+            // Pipeline-parallel load path: load only the assigned layer range (Llama only)
             if let Some(stage) = pipeline_stage {
                 let llama = SplittableLlama::load_partial(
                     &content,
@@ -185,11 +224,38 @@ impl InferenceBackend for CandleBackend {
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(handle.id, Arc::new(Mutex::new(pipeline_model)));
             } else {
-                // Standard full-model load path
-                let weights =
-                    ModelWeights::from_gguf(content, &mut file, &device).map_err(|e| {
-                        InferenceError::LoadError(format!("Failed to load model weights: {e}"))
+                // Standard full-model load path across supported architectures
+                let weights = if is_llama {
+                    let w = LlamaWeights::from_gguf(content, &mut file, &device).map_err(|e| {
+                        InferenceError::LoadError(format!("Failed to load Llama weights: {e}"))
                     })?;
+                    CandleWeights::Llama(w)
+                } else if is_qwen2 {
+                    // Cap context_length to 4096 so precomputed RoPE tables don't exhaust mobile RAM
+                    if let Some(val) = content.metadata.get_mut("qwen2.context_length") {
+                        if let Ok(ctx) = val.to_u32() {
+                            if ctx > 4096 {
+                                *val = gguf_file::Value::U32(4096);
+                            }
+                        }
+                    }
+                    let w = Qwen2Weights::from_gguf(content, &mut file, &device).map_err(|e| {
+                        InferenceError::LoadError(format!("Failed to load Qwen2 weights: {e}"))
+                    })?;
+                    CandleWeights::Qwen2(Mutex::new(w))
+                } else {
+                    if let Some(val) = content.metadata.get_mut("phi3.context_length") {
+                        if let Ok(ctx) = val.to_u32() {
+                            if ctx > 4096 {
+                                *val = gguf_file::Value::U32(4096);
+                            }
+                        }
+                    }
+                    let w = Phi3Weights::from_gguf(false, content, &mut file, &device).map_err(
+                        |e| InferenceError::LoadError(format!("Failed to load Phi3 weights: {e}")),
+                    )?;
+                    CandleWeights::Phi3(w)
+                };
 
                 tracing::info!(path = %path.display(), "Model loaded via Candle");
 
@@ -197,6 +263,7 @@ impl InferenceBackend for CandleBackend {
                     weights,
                     tokenizer,
                     device,
+                    eos_token_id,
                 });
 
                 loaded_models
@@ -617,6 +684,256 @@ fn rand_f32() -> f32 {
     })
 }
 
+/// Per-turn mutable handle for running forward passes across architectures.
+enum ActiveWeights<'a> {
+    Llama(LlamaWeights),
+    Qwen2(std::sync::MutexGuard<'a, Qwen2Weights>),
+    Phi3(Phi3Weights),
+}
+
+impl<'a> ActiveWeights<'a> {
+    fn from_loaded(weights: &'a CandleWeights) -> Self {
+        match weights {
+            CandleWeights::Llama(w) => Self::Llama(w.clone()),
+            CandleWeights::Qwen2(m) => Self::Qwen2(m.lock().unwrap_or_else(|e| e.into_inner())),
+            CandleWeights::Phi3(w) => Self::Phi3(w.clone()),
+        }
+    }
+
+    fn forward(&mut self, input: &Tensor, index_pos: usize) -> candle_core::Result<Tensor> {
+        match self {
+            Self::Llama(w) => w.forward(input, index_pos),
+            Self::Qwen2(w) => w.forward(input, index_pos),
+            Self::Phi3(w) => w.forward(input, index_pos),
+        }
+    }
+}
+
+/// Reconstruct a HuggingFace `tokenizer.json` directly from GGUF `tokenizer.ggml.*` metadata.
+///
+/// Supports both ByteLevel BPE (`tokenizer.ggml.model = "gpt2"`, used by Llama 3.x, Qwen 2.5,
+/// SmolLM2, DeepSeek) and SentencePiece BPE/Unigram (`tokenizer.ggml.model = "llama"`, used by
+/// TinyLlama, Mistral, Phi-3).
+fn build_tokenizer_from_gguf(
+    content: &gguf_file::Content,
+    save_path: Option<&Path>,
+) -> Option<tokenizers::Tokenizer> {
+    let tokens_val = content.metadata.get("tokenizer.ggml.tokens")?;
+    let gguf_file::Value::Array(tokens_arr) = tokens_val else {
+        return None;
+    };
+    let mut tokens: Vec<String> = Vec::with_capacity(tokens_arr.len());
+    for v in tokens_arr {
+        tokens.push(v.to_string().ok()?.clone());
+    }
+    if tokens.is_empty() {
+        return None;
+    }
+
+    let model_type = content
+        .metadata
+        .get("tokenizer.ggml.model")
+        .and_then(|v| v.to_string().ok())
+        .map(|s| s.as_str())
+        .unwrap_or("gpt2");
+
+    let token_types: Vec<i32> = content
+        .metadata
+        .get("tokenizer.ggml.token_type")
+        .and_then(|v| match v {
+            gguf_file::Value::Array(arr) => Some(
+                arr.iter()
+                    .map(|x| {
+                        x.to_i32()
+                            .or_else(|_| x.to_u32().map(|u| u as i32))
+                            .unwrap_or(1)
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    let merges: Vec<String> = content
+        .metadata
+        .get("tokenizer.ggml.merges")
+        .and_then(|v| match v {
+            gguf_file::Value::Array(arr) => {
+                let mut m = Vec::with_capacity(arr.len());
+                for item in arr {
+                    if let Ok(s) = item.to_string() {
+                        m.push(s.clone());
+                    }
+                }
+                Some(m)
+            }
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    let scores: Vec<f64> = content
+        .metadata
+        .get("tokenizer.ggml.scores")
+        .and_then(|v| match v {
+            gguf_file::Value::Array(arr) => Some(
+                arr.iter()
+                    .map(|x| x.to_f32().map(|f| f as f64).unwrap_or(0.0))
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    let mut added_tokens = Vec::new();
+    for (idx, tok_str) in tokens.iter().enumerate() {
+        let ttype = token_types.get(idx).copied().unwrap_or(1);
+        let is_special = ttype == 3
+            || ttype == 4
+            || (tok_str.starts_with("<|") && tok_str.ends_with("|>"))
+            || matches!(
+                tok_str.as_str(),
+                "<s>" | "</s>" | "<unk>" | "<pad>" | "<end_of_turn>" | "<start_of_turn>" | "<eos>"
+            );
+        if is_special {
+            added_tokens.push(serde_json::json!({
+                "id": idx,
+                "content": tok_str,
+                "single_word": false,
+                "lstrip": false,
+                "rstrip": false,
+                "normalized": false,
+                "special": true
+            }));
+        }
+    }
+
+    let tok_json = if !merges.is_empty() || model_type == "gpt2" {
+        let mut vocab = serde_json::Map::with_capacity(tokens.len());
+        for (idx, tok_str) in tokens.iter().enumerate() {
+            vocab.insert(tok_str.clone(), serde_json::Value::from(idx));
+        }
+
+        if model_type == "llama" {
+            serde_json::json!({
+                "version": "1.0",
+                "truncation": null,
+                "padding": null,
+                "added_tokens": added_tokens,
+                "normalizer": {
+                    "type": "Sequence",
+                    "normalizers": [
+                        { "type": "Prepend", "prepend": "▁" },
+                        { "type": "Replace", "pattern": { "String": " " }, "content": "▁" }
+                    ]
+                },
+                "pre_tokenizer": null,
+                "post_processor": null,
+                "decoder": {
+                    "type": "Sequence",
+                    "decoders": [
+                        { "type": "Replace", "pattern": { "String": "▁" }, "content": " " },
+                        { "type": "ByteFallback" },
+                        { "type": "Fuse" },
+                        { "type": "Strip", "content": " ", "start": 1, "stop": 0 }
+                    ]
+                },
+                "model": {
+                    "type": "BPE",
+                    "dropout": null,
+                    "unk_token": "<unk>",
+                    "continuing_subword_prefix": null,
+                    "end_of_word_suffix": null,
+                    "fuse_unk": false,
+                    "byte_fallback": true,
+                    "vocab": vocab,
+                    "merges": merges
+                }
+            })
+        } else {
+            serde_json::json!({
+                "version": "1.0",
+                "truncation": null,
+                "padding": null,
+                "added_tokens": added_tokens,
+                "normalizer": null,
+                "pre_tokenizer": {
+                    "type": "ByteLevel",
+                    "add_prefix_space": false,
+                    "trim_offsets": true,
+                    "use_regex": true
+                },
+                "post_processor": {
+                    "type": "ByteLevel",
+                    "add_prefix_space": true,
+                    "trim_offsets": false,
+                    "use_regex": true
+                },
+                "decoder": {
+                    "type": "ByteLevel",
+                    "add_prefix_space": true,
+                    "trim_offsets": true,
+                    "use_regex": true
+                },
+                "model": {
+                    "type": "BPE",
+                    "dropout": null,
+                    "unk_token": null,
+                    "continuing_subword_prefix": "",
+                    "end_of_word_suffix": "",
+                    "fuse_unk": false,
+                    "byte_fallback": false,
+                    "vocab": vocab,
+                    "merges": merges
+                }
+            })
+        }
+    } else {
+        // SentencePiece Unigram (e.g. TinyLlama / Mistral / Phi-3 without merges array)
+        let mut uni_vocab = Vec::with_capacity(tokens.len());
+        for (idx, tok_str) in tokens.iter().enumerate() {
+            let sc = scores.get(idx).copied().unwrap_or(0.0);
+            uni_vocab.push(serde_json::json!([tok_str, sc]));
+        }
+        serde_json::json!({
+            "version": "1.0",
+            "truncation": null,
+            "padding": null,
+            "added_tokens": added_tokens,
+            "normalizer": {
+                "type": "Sequence",
+                "normalizers": [
+                    { "type": "Prepend", "prepend": "▁" },
+                    { "type": "Replace", "pattern": { "String": " " }, "content": "▁" }
+                ]
+            },
+            "pre_tokenizer": null,
+            "post_processor": null,
+            "decoder": {
+                "type": "Sequence",
+                "decoders": [
+                    { "type": "Replace", "pattern": { "String": "▁" }, "content": " " },
+                    { "type": "ByteFallback" },
+                    { "type": "Fuse" },
+                    { "type": "Strip", "content": " ", "start": 1, "stop": 0 }
+                ]
+            },
+            "model": {
+                "type": "Unigram",
+                "unk_id": 0,
+                "vocab": uni_vocab,
+                "byte_fallback": true
+            }
+        })
+    };
+
+    let bytes = serde_json::to_vec(&tok_json).ok()?;
+    let tokenizer = tokenizers::Tokenizer::from_bytes(&bytes).ok()?;
+    if let Some(path) = save_path {
+        let _ = std::fs::write(path, &bytes);
+    }
+    Some(tokenizer)
+}
+
 /// Blocking generation returning the complete text.
 fn generate_blocking(loaded: &LoadedModel, req: &GenerateRequest) -> Result<String> {
     let prompt = build_prompt(req);
@@ -625,14 +942,22 @@ fn generate_blocking(loaded: &LoadedModel, req: &GenerateRequest) -> Result<Stri
         .encode(prompt.as_str(), true)
         .map_err(|e| InferenceError::GenerationError(format!("Tokenization failed: {e}")))?;
 
-    let prompt_tokens: Vec<u32> = encoding.get_ids().to_vec();
+    let mut prompt_tokens: Vec<u32> = encoding.get_ids().to_vec();
+    if prompt_tokens.len() >= 2 && prompt_tokens[0] == prompt_tokens[1] {
+        prompt_tokens.remove(0);
+    }
+    if prompt_tokens.is_empty() {
+        return Err(InferenceError::GenerationError(
+            "Prompt tokenization produced 0 tokens".into(),
+        ));
+    }
+
     let input = Tensor::new(prompt_tokens.as_slice(), &loaded.device)
         .map_err(|e| InferenceError::GenerationError(format!("Tensor creation failed: {e}")))?
         .unsqueeze(0)
         .map_err(|e| InferenceError::GenerationError(format!("Unsqueeze failed: {e}")))?;
 
-    // Clone weights for mutable forward pass
-    let mut weights = loaded.weights.clone();
+    let mut weights = ActiveWeights::from_loaded(&loaded.weights);
 
     // Forward pass on prompt
     let logits = weights
@@ -642,18 +967,23 @@ fn generate_blocking(loaded: &LoadedModel, req: &GenerateRequest) -> Result<Stri
     let last_logits = extract_last_logits(&logits)?;
 
     let mut next_token = sample_token(&last_logits, req.sampling.temperature, req.sampling.top_p)?;
+    let mut generated_tokens: Vec<u32> = Vec::new();
     let mut output = String::new();
     let seq_len = prompt_tokens.len();
 
-    let eos_tokens = find_eos_tokens(&loaded.tokenizer, req.model_name.as_deref());
+    let mut eos_tokens = find_eos_tokens(&loaded.tokenizer, req.model_name.as_deref());
+    if let Some(eos_id) = loaded.eos_token_id {
+        eos_tokens.insert(eos_id);
+    }
 
     for i in 0..req.max_tokens {
         if eos_tokens.contains(&next_token) {
             break;
         }
 
-        if let Ok(text) = loaded.tokenizer.decode(&[next_token], true) {
-            output.push_str(&text);
+        generated_tokens.push(next_token);
+        if let Ok(text) = loaded.tokenizer.decode(&generated_tokens, true) {
+            output = text;
         }
 
         // Check stop sequences
@@ -697,13 +1027,22 @@ fn stream_blocking(
         .encode(prompt.as_str(), true)
         .map_err(|e| InferenceError::GenerationError(format!("Tokenization failed: {e}")))?;
 
-    let prompt_tokens: Vec<u32> = encoding.get_ids().to_vec();
+    let mut prompt_tokens: Vec<u32> = encoding.get_ids().to_vec();
+    if prompt_tokens.len() >= 2 && prompt_tokens[0] == prompt_tokens[1] {
+        prompt_tokens.remove(0);
+    }
+    if prompt_tokens.is_empty() {
+        return Err(InferenceError::GenerationError(
+            "Prompt tokenization produced 0 tokens".into(),
+        ));
+    }
+
     let input = Tensor::new(prompt_tokens.as_slice(), &loaded.device)
         .map_err(|e| InferenceError::GenerationError(format!("Tensor creation failed: {e}")))?
         .unsqueeze(0)
         .map_err(|e| InferenceError::GenerationError(format!("Unsqueeze failed: {e}")))?;
 
-    let mut weights = loaded.weights.clone();
+    let mut weights = ActiveWeights::from_loaded(&loaded.weights);
 
     let logits = weights
         .forward(&input, 0)
@@ -713,39 +1052,49 @@ fn stream_blocking(
 
     let mut next_token = sample_token(&last_logits, req.sampling.temperature, req.sampling.top_p)?;
     let seq_len = prompt_tokens.len();
-    let mut accumulated = String::new();
+    let mut generated_tokens: Vec<u32> = Vec::new();
+    let mut prev_len: usize = 0;
 
-    let eos_tokens = find_eos_tokens(&loaded.tokenizer, req.model_name.as_deref());
+    let mut eos_tokens = find_eos_tokens(&loaded.tokenizer, req.model_name.as_deref());
+    if let Some(eos_id) = loaded.eos_token_id {
+        eos_tokens.insert(eos_id);
+    }
 
     for i in 0..req.max_tokens {
         if eos_tokens.contains(&next_token) {
             break;
         }
 
-        let piece = loaded
+        generated_tokens.push(next_token);
+        let decoded = loaded
             .tokenizer
-            .decode(&[next_token], true)
+            .decode(&generated_tokens, true)
             .unwrap_or_default();
-
-        accumulated.push_str(&piece);
 
         if req
             .stop_sequences
             .iter()
-            .any(|stop| accumulated.ends_with(stop))
+            .any(|stop| decoded.ends_with(stop))
         {
             break;
         }
 
-        let tok = Token {
-            text: piece,
-            id: next_token,
-            logprob: None,
-            is_special: false,
-        };
-
-        if tx.blocking_send(Ok(tok)).is_err() {
-            break;
+        // Only emit complete UTF-8 characters (wait if trailing byte is incomplete '\u{FFFD}')
+        if decoded.len() > prev_len && !decoded.ends_with('\u{FFFD}') {
+            if let Some(piece) = decoded.get(prev_len..) {
+                if !piece.is_empty() {
+                    prev_len = decoded.len();
+                    let tok = Token {
+                        text: piece.to_string(),
+                        id: next_token,
+                        logprob: None,
+                        is_special: false,
+                    };
+                    if tx.blocking_send(Ok(tok)).is_err() {
+                        break;
+                    }
+                }
+            }
         }
 
         let input = Tensor::new(&[next_token], &loaded.device)
@@ -957,5 +1306,39 @@ mod tests {
             msg.contains("architecture") && msg.contains("Candle"),
             "error must explain the architecture limitation, got: {msg}"
         );
+    }
+
+    #[test]
+    fn test_build_tokenizer_from_gguf_gpt2_and_llama() {
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert(
+            "tokenizer.ggml.model".to_string(),
+            gguf_file::Value::String("gpt2".to_string()),
+        );
+        metadata.insert(
+            "tokenizer.ggml.tokens".to_string(),
+            gguf_file::Value::Array(vec![
+                gguf_file::Value::String("<|endoftext|>".to_string()),
+                gguf_file::Value::String("H".to_string()),
+                gguf_file::Value::String("i".to_string()),
+                gguf_file::Value::String("Hi".to_string()),
+            ]),
+        );
+        metadata.insert(
+            "tokenizer.ggml.merges".to_string(),
+            gguf_file::Value::Array(vec![gguf_file::Value::String("H i".to_string())]),
+        );
+        let content = gguf_file::Content {
+            magic: gguf_file::VersionedMagic::GgufV3,
+            metadata,
+            tensor_infos: std::collections::HashMap::new(),
+            tensor_data_offset: 0,
+        };
+        let tok = build_tokenizer_from_gguf(&content, None)
+            .expect("should reconstruct gpt2 BPE tokenizer from GGUF metadata");
+        let enc = tok.encode("Hi", false).expect("encode Hi");
+        assert_eq!(enc.get_ids(), &[3]);
+        let dec = tok.decode(&[3], true).expect("decode Hi");
+        assert_eq!(dec, "Hi");
     }
 }

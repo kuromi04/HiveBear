@@ -8,8 +8,8 @@ import ChatInput from "../components/ChatInput";
 import ConversationDrawer from "../components/ConversationDrawer";
 import { DEFAULT_CHAT_PARAMS, type ChatParams } from "../components/ChatParamsPanel";
 import type { DisplayMessage } from "../hooks/useInference";
-import { PanelLeft, Plus, Loader, Sparkles, Globe } from "lucide-react";
-import { connectMeshPeer } from "../lib/invoke";
+import { PanelLeft, Plus, Loader, Sparkles, Globe, RefreshCw } from "lucide-react";
+import { connectMeshPeer, discoverMeshPeers, type DiscoveredMeshPeer } from "../lib/invoke";
 import { EmptyState } from "../components/ui";
 
 export default function Chat() {
@@ -27,16 +27,43 @@ export default function Chat() {
   // Mesh PC connection state
   const [showMeshModal, setShowMeshModal] = useState(false);
   const [meshPeerInput, setMeshPeerInput] = useState("192.168.0.4:7878");
-  const [meshModelName, setMeshModelName] = useState("PC Remote Model");
+  const [meshModelName, setMeshModelName] = useState("");
   const [meshConnecting, setMeshConnecting] = useState(false);
   const [meshError, setMeshError] = useState<string | null>(null);
+  const [discoveredPeers, setDiscoveredPeers] = useState<DiscoveredMeshPeer[]>([]);
+  const [discoveringPeers, setDiscoveringPeers] = useState(false);
 
-  const handleConnectMesh = useCallback(async () => {
-    if (!meshPeerInput.trim()) return;
+  const scanMeshPeers = useCallback(async () => {
+    setDiscoveringPeers(true);
+    try {
+      const peers = await discoverMeshPeers();
+      setDiscoveredPeers(peers);
+      if (peers.length > 0) {
+        const first = peers[0];
+        setMeshPeerInput(first.addr);
+        if (first.serving_model_id) {
+          setMeshModelName(first.serving_model_id);
+        }
+      }
+    } catch {
+      // ignore discovery errors
+    } finally {
+      setDiscoveringPeers(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showMeshModal || loaded.length === 0) {
+      scanMeshPeers();
+    }
+  }, [showMeshModal, loaded.length, scanMeshPeers]);
+
+  const handleConnectPeerDirect = useCallback(async (peerAddr: string, peerModel?: string | null) => {
+    if (!peerAddr.trim()) return;
     setMeshConnecting(true);
     setMeshError(null);
     try {
-      const res = await connectMeshPeer(meshPeerInput.trim(), meshModelName.trim() || undefined);
+      const res = await connectMeshPeer(peerAddr.trim(), peerModel?.trim() || undefined);
       setActiveHandleId(res.handle_id);
       await refreshLoaded();
       setShowMeshModal(false);
@@ -45,10 +72,16 @@ export default function Chat() {
     } finally {
       setMeshConnecting(false);
     }
-  }, [meshPeerInput, meshModelName, refreshLoaded]);
+  }, [refreshLoaded]);
 
-  // Conversation drawer (open by default like ChatGPT)
-  const [drawerOpen, setDrawerOpen] = useState(true);
+  const handleConnectMesh = useCallback(async () => {
+    await handleConnectPeerDirect(meshPeerInput, meshModelName);
+  }, [handleConnectPeerDirect, meshPeerInput, meshModelName]);
+
+  // Conversation drawer (open by default on desktop, closed by default on mobile)
+  const [drawerOpen, setDrawerOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+  );
 
   // Conversation persistence
   const {
@@ -217,40 +250,42 @@ export default function Chat() {
       {/* Main Chat Area */}
       <div className="relative flex flex-1 flex-col h-full overflow-hidden min-w-0">
         {/* Top bar */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
-          <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => setDrawerOpen(!drawerOpen)}
-              className="interactive-hover rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
+              className="interactive-hover shrink-0 rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
               title={drawerOpen ? "Ocultar panel" : "Ver historial de chats"}
             >
               <PanelLeft size={16} />
             </button>
-            <h1 className="text-sm font-medium text-text-primary">
+            <h1 className="truncate text-sm font-medium text-text-primary">
               {activeId
                 ? conversations.find((c) => c.id === activeId)?.title || "Chat"
                 : "New Chat"}
             </h1>
           </div>
-          <button
-            onClick={() => setShowMeshModal(true)}
-            className="interactive-hover flex items-center gap-1 rounded-[var(--radius-md)] border border-paw-500/30 bg-paw-500/10 px-2 py-1 text-xs text-paw-400 hover:bg-paw-500/20"
-            title="Conectar a PC por Mesh"
-          >
-            <Globe size={13} />
-            <span className="hidden sm:inline">Conectar a PC</span>
-          </button>
-          <button
-            onClick={handleNewChat}
-            className="interactive-hover rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
-            title="New chat"
-          >
-            <Plus size={16} />
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              onClick={() => setShowMeshModal(true)}
+              className="interactive-hover flex items-center gap-1 rounded-[var(--radius-md)] border border-paw-500/30 bg-paw-500/10 px-2.5 py-1 text-xs font-medium text-paw-400 hover:bg-paw-500/20"
+              title="Conectar a PC por Mesh"
+            >
+              <Globe size={13} />
+              <span>PC Mesh</span>
+            </button>
+            <button
+              onClick={handleNewChat}
+              className="interactive-hover rounded-[var(--radius-md)] p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary"
+              title="New chat"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
         </div>
 
       {/* Messages or empty state */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
         {loaded.length === 0 ? (
           /* No model loaded */
           <div className="flex h-full items-center justify-center">
@@ -286,7 +321,36 @@ export default function Chat() {
                 <p className="text-xs text-text-muted">Loading model… this can take a minute.</p>
               )}
               {loadError && <p className="text-xs text-danger">{loadError}</p>}
-              <div className="mt-4 flex flex-col items-center gap-2">
+              <div className="mt-4 flex w-full max-w-sm flex-col items-center gap-2">
+                {discoveredPeers.length > 0 && (
+                  <div className="w-full space-y-1.5 rounded-[var(--radius-md)] border border-paw-500/30 bg-paw-500/5 p-2.5 text-left">
+                    <span className="block text-[11px] font-semibold text-paw-400">
+                      Nodos PC detectados en tu red ({discoveredPeers.length}):
+                    </span>
+                    {discoveredPeers.slice(0, 3).map((peer) => (
+                      <div
+                        key={peer.node_id}
+                        className="flex items-center justify-between gap-2 rounded bg-surface-raised px-2.5 py-1.5 text-xs"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-text-primary">
+                            {peer.serving_model_id || "Modelo en PC (Auto-detectar)"}
+                          </span>
+                          <span className="block truncate font-mono text-[10px] text-text-muted">
+                            {peer.addr} • {peer.source}
+                          </span>
+                        </div>
+                        <button
+                          disabled={meshConnecting}
+                          onClick={() => handleConnectPeerDirect(peer.addr, peer.serving_model_id)}
+                          className="shrink-0 rounded bg-paw-500 px-2.5 py-1 text-[11px] font-medium text-black hover:bg-paw-400 disabled:opacity-50"
+                        >
+                          {meshConnecting ? "..." : "Conectar"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <span className="text-xs text-text-muted">¿Tu modelo está corriendo en la PC?</span>
                 <button
                   onClick={() => setShowMeshModal(true)}
@@ -300,9 +364,9 @@ export default function Chat() {
         ) : messages.length === 0 ? (
           /* Empty conversation */
           <div className="flex h-full flex-col items-center justify-center">
-            <div className="flex flex-col items-center gap-3 animate-[fade-in]">
-              <div className="flex h-16 w-16 items-center justify-center rounded-[var(--radius-xl)] bg-paw-500/10">
-                <Sparkles size={28} className="text-paw-500" />
+            <div className="flex w-full max-w-md flex-col items-center gap-3 animate-[fade-in]">
+              <div className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-[var(--radius-xl)] bg-paw-500/10">
+                <Sparkles size={26} className="text-paw-500" />
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium text-text-primary">
@@ -313,7 +377,7 @@ export default function Chat() {
                 </p>
               </div>
 
-              <div className="mt-4 flex w-full max-w-md flex-col gap-2">
+              <div className="mt-3 flex w-full flex-col gap-2">
                 {[
                   { title: "Explain quantum computing", desc: "Break it down in simple terms" },
                   { title: "Write a Python sort function", desc: "With type hints and docstring" },
@@ -333,7 +397,7 @@ export default function Chat() {
           </div>
         ) : (
           /* Messages */
-          <div className="mx-auto max-w-2xl space-y-6">
+          <div className="mx-auto max-w-2xl space-y-5 sm:space-y-6">
             {messages.map((msg, i) => {
               const isLastMessage = i === messages.length - 1;
               const isStreaming = streaming && isLastMessage && msg.role === "assistant";
@@ -411,14 +475,55 @@ export default function Chat() {
       </div>
 
       {showMeshModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[var(--radius-lg)] border border-border bg-surface-raised p-5 shadow-xl">
-            <h3 className="text-base font-semibold text-text-primary flex items-center gap-2">
-              <Globe size={18} className="text-paw-400" /> Conectar a PC por Mesh P2P
-            </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-sm">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-[var(--radius-lg)] border border-border bg-surface-raised p-4 sm:p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm sm:text-base font-semibold text-text-primary flex items-center gap-2">
+                <Globe size={18} className="text-paw-400 shrink-0" /> Conectar a PC por Mesh P2P
+              </h3>
+              <button
+                onClick={scanMeshPeers}
+                disabled={discoveringPeers}
+                className="flex items-center gap-1 rounded border border-border bg-surface-overlay px-2 py-1 text-[11px] text-text-secondary hover:text-text-primary"
+                title="Buscar PCs en la red"
+              >
+                <RefreshCw size={11} className={discoveringPeers ? "animate-spin" : ""} />
+                <span>{discoveringPeers ? "Buscando…" : "Buscar PC"}</span>
+              </button>
+            </div>
             <p className="mt-1 text-xs text-text-muted">
               Usa el modelo ejecutándose en tu PC sin descargar nada ni consumir RAM en el móvil.
             </p>
+
+            {discoveredPeers.length > 0 && (
+              <div className="mt-3 space-y-1.5 rounded-[var(--radius-md)] border border-paw-500/30 bg-paw-500/5 p-2.5">
+                <span className="block text-[11px] font-semibold text-paw-400">
+                  Nodos PC encontrados ({discoveredPeers.length}):
+                </span>
+                {discoveredPeers.map((peer) => (
+                  <div
+                    key={peer.node_id}
+                    className="flex items-center justify-between gap-2 rounded bg-surface-overlay px-2.5 py-2 text-xs"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-text-primary">
+                        {peer.serving_model_id || "Modelo en PC (Auto-detectar)"}
+                      </span>
+                      <span className="block truncate font-mono text-[10px] text-text-muted">
+                        {peer.addr} ({peer.source})
+                      </span>
+                    </div>
+                    <button
+                      disabled={meshConnecting}
+                      onClick={() => handleConnectPeerDirect(peer.addr, peer.serving_model_id)}
+                      className="shrink-0 rounded bg-paw-500 px-3 py-1 text-xs font-medium text-black hover:bg-paw-400 disabled:opacity-50"
+                    >
+                      Conectar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="mt-4 space-y-3">
               <div>
@@ -433,12 +538,14 @@ export default function Chat() {
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-text-secondary">Nombre o Identificador del Modelo</label>
+                <label className="text-[11px] font-medium text-text-secondary">
+                  Modelo en PC (opcional — se detecta automáticamente si lo dejas vacío)
+                </label>
                 <input
                   type="text"
                   value={meshModelName}
                   onChange={(e) => setMeshModelName(e.target.value)}
-                  placeholder="ej. DeepSeek-R1 o Llama-3.3"
+                  placeholder="Auto-detectar modelo de la PC"
                   className="mt-1 w-full rounded-[var(--radius-md)] border border-border bg-surface-overlay px-3 py-2 text-xs text-text-primary focus:border-paw-500 focus:outline-none"
                 />
               </div>

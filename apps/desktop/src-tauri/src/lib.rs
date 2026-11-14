@@ -61,7 +61,7 @@ pub fn run() {
             let auto_join = {
                 let state = app.state::<AppState>();
                 let config = state.config.lock().unwrap_or_else(|e| e.into_inner());
-                config.mesh.enabled && config.mesh.auto_join
+                config.mesh.enabled
             };
             if auto_join {
                 let handle = app.handle().clone();
@@ -100,6 +100,7 @@ pub fn run() {
             commands::mesh::join_mesh,
             commands::mesh::leave_mesh,
             commands::mesh::get_mesh_connection_status,
+            commands::mesh::discover_mesh_peers,
             commands::mesh::connect_mesh_peer,
             commands::chat::list_conversations,
             commands::chat::create_conversation,

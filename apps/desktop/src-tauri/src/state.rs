@@ -16,12 +16,181 @@ pub struct MeshPeerSession {
 }
 use tracing::info;
 
+/// Mesh inference handler for the Desktop/Mobile Tauri application.
+///
+/// Automatically uses any currently loaded local model in `Orchestrator`, or
+/// loads the requested / first installed model from `Registry` on demand when
+/// a remote P2P peer (e.g. mobile APK or Termux) requests inference.
+pub struct DesktopMeshInferenceHandler {
+    pub orchestrator: Arc<Orchestrator>,
+    pub registry: Arc<Registry>,
+}
+
+impl DesktopMeshInferenceHandler {
+    async fn resolve_or_load_handle(
+        &self,
+        requested_model: &str,
+    ) -> Result<(hivebear_inference::ModelHandle, String), String> {
+        let req_lower = requested_model.trim().to_lowercase();
+        let is_generic = req_lower.is_empty()
+            || req_lower == "__probe__"
+            || req_lower == "remote model"
+            || req_lower == "pc remote model"
+            || req_lower == "remote_model"
+            || req_lower == "remote pc"
+            || req_lower == "modelo remoto pc"
+            || req_lower == "desconocido"
+            || req_lower == "default";
+
+        // 1. Check already loaded local models
+        let loaded = self.orchestrator.loaded_models();
+        if !loaded.is_empty() {
+            let chosen = if !is_generic {
+                loaded
+                    .iter()
+                    .find(|m| m.model_path.to_lowercase().contains(&req_lower))
+                    .unwrap_or(&loaded[0])
+            } else {
+                &loaded[0]
+            };
+            let label = std::path::Path::new(&chosen.model_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(&chosen.model_path)
+                .to_string();
+            return Ok((
+                hivebear_inference::ModelHandle {
+                    id: chosen.handle_id,
+                    model_path: chosen.model_path.clone().into(),
+                    engine: chosen.engine,
+                },
+                label,
+            ));
+        }
+
+        // 2. No model currently loaded in memory: auto-load from installed models in Registry
+        let installed = self.registry.list_installed().await;
+        if installed.is_empty() {
+            return Err(
+                "La PC conectada no tiene ningún modelo instalado o cargado en HiveBear. Instala o carga un modelo en la PC primero."
+                    .into(),
+            );
+        }
+
+        let target = if !is_generic {
+            installed
+                .iter()
+                .find(|m| {
+                    m.id.to_lowercase().contains(&req_lower)
+                        || m.name.to_lowercase().contains(&req_lower)
+                })
+                .unwrap_or(&installed[0])
+        } else {
+            &installed[0]
+        };
+
+        let resolved = self
+            .registry
+            .resolve(&target.id)
+            .await
+            .map_err(|e| format!("Failed to resolve model '{}' on PC: {e}", target.id))?;
+        let _ = self.registry.ensure_tokenizer(&target.id, &resolved).await;
+
+        let handle = self
+            .orchestrator
+            .load(&resolved, &hivebear_inference::LoadConfig::default())
+            .await
+            .map_err(|e| format!("Failed to load model '{}' on PC: {e}", target.name))?;
+
+        Ok((handle, target.name.clone()))
+    }
+}
+
+#[async_trait::async_trait]
+impl hivebear_mesh::MeshInferenceHandler for DesktopMeshInferenceHandler {
+    async fn handle_inference(
+        &self,
+        model_id: &str,
+        messages_json: &str,
+        max_tokens: u32,
+        temperature: f32,
+    ) -> std::result::Result<
+        std::pin::Pin<Box<dyn futures::Stream<Item = std::result::Result<String, String>> + Send>>,
+        String,
+    > {
+        use futures::StreamExt;
+
+        // Fast probe request: return the detected model name on this PC
+        if model_id == "__probe__" || max_tokens == 0 {
+            let loaded = self.orchestrator.loaded_models();
+            let model_name = if let Some(first) = loaded.first() {
+                std::path::Path::new(&first.model_path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(&first.model_path)
+                    .to_string()
+            } else {
+                let installed = self.registry.list_installed().await;
+                if let Some(first) = installed.first() {
+                    first.name.clone()
+                } else {
+                    return Err(
+                        "No hay modelos instalados en el nodo PC. Descarga un modelo en la PC primero."
+                            .into(),
+                    );
+                }
+            };
+
+            let (tx, rx) = tokio::sync::mpsc::channel(1);
+            let _ = tx.send(Ok(model_name)).await;
+            return Ok(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)));
+        }
+
+        let (handle, _model_label) = self.resolve_or_load_handle(model_id).await?;
+
+        let messages: Vec<hivebear_inference::types::ChatMessage> =
+            serde_json::from_str(messages_json)
+                .map_err(|e| format!("Invalid messages_json: {e}"))?;
+
+        let req = hivebear_inference::GenerateRequest {
+            messages,
+            max_tokens,
+            sampling: hivebear_inference::SamplingParams {
+                temperature,
+                ..Default::default()
+            },
+            model_name: Some(handle.model_path.display().to_string()),
+            ..Default::default()
+        };
+
+        let mut token_stream = self
+            .orchestrator
+            .stream(&handle, &req)
+            .map_err(|e| format!("Stream error: {e}"))?;
+
+        let (tx, rx) = tokio::sync::mpsc::channel(64);
+        tokio::spawn(async move {
+            while let Some(item) = token_stream.next().await {
+                let mapped = match item {
+                    Ok(tok) => Ok(tok.text),
+                    Err(e) => Err(e.to_string()),
+                };
+                if tx.send(mapped).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        Ok(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)))
+    }
+}
+
 /// Shared application state managed by Tauri.
 pub struct AppState {
     pub config: Mutex<Config>,
     pub profile: HardwareProfile,
-    pub orchestrator: Orchestrator,
-    pub registry: Registry,
+    pub orchestrator: Arc<Orchestrator>,
+    pub registry: Arc<Registry>,
     pub chat_db: ChatDatabase,
     pub paths: AppPaths,
     pub http_client: reqwest::Client,
@@ -52,9 +221,11 @@ impl AppState {
         }
 
         let profile = hivebear_core::profile();
-        let orchestrator = Orchestrator::with_config(profile.clone(), &config);
-        let registry = tauri::async_runtime::block_on(Registry::new(&config, &paths))
-            .expect("Failed to initialize model registry");
+        let orchestrator = Arc::new(Orchestrator::with_config(profile.clone(), &config));
+        let registry = Arc::new(
+            tauri::async_runtime::block_on(Registry::new(&config, &paths))
+                .expect("Failed to initialize model registry"),
+        );
         let chat_db = ChatDatabase::open(&paths.db_file).expect("Failed to open chat database");
 
         Self {
@@ -68,6 +239,39 @@ impl AppState {
             mesh_node: Mutex::new(None),
             mesh_peer_connections: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Detect the name of the model this node can serve over P2P Mesh.
+    pub fn detect_serving_model_id(&self) -> Option<String> {
+        let loaded = self.orchestrator.loaded_models();
+        if let Some(first) = loaded.first() {
+            return std::path::Path::new(&first.model_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_string())
+                .or_else(|| Some(first.model_path.clone()));
+        }
+        // Check models_dir on disk for any installed GGUF model directory
+        if let Ok(entries) = std::fs::read_dir(&self.paths.models_dir) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with('.') {
+                        continue;
+                    }
+                    if let Ok(files) = std::fs::read_dir(entry.path()) {
+                        let has_gguf = files.flatten().any(|f| {
+                            let fname = f.file_name().to_string_lossy().to_lowercase();
+                            fname.ends_with(".gguf") && !fname.ends_with(".partial")
+                        });
+                        if has_gguf {
+                            return Some(name);
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     /// Start the mesh node: register with the coordination server and begin heartbeats.
@@ -156,6 +360,8 @@ impl AppState {
             advertise_addr.set_ip(ip);
         }
 
+        let serving_model_id = self.detect_serving_model_id();
+
         let local_info = hivebear_mesh::PeerInfo {
             node_id: node.local_id.clone(),
             hardware: self.profile.clone(),
@@ -169,14 +375,25 @@ impl AppState {
             external_addr: None,
             nat_type: hivebear_mesh::NatType::Unknown,
             latency_map: std::collections::HashMap::new(),
-            serving_model_id: None,
+            serving_model_id,
             swarm_id: None,
             draft_capability: None,
         };
 
+        // Spawn MeshWorkerDaemon so this node answers incoming P2P InferenceRequest messages
+        let handler = Arc::new(DesktopMeshInferenceHandler {
+            orchestrator: self.orchestrator.clone(),
+            registry: self.registry.clone(),
+        });
+        let worker_transport = node.transport.clone();
+        tauri::async_runtime::spawn(async move {
+            let daemon = hivebear_mesh::MeshWorkerDaemon::new(handler, worker_transport);
+            daemon.run().await;
+        });
+
         // Start in background — never blocks the caller
         node.start_background(listen_addr, local_info);
-        info!("Mesh node starting in background");
+        info!("Mesh node and worker daemon starting in background");
 
         *self.mesh_node.lock().unwrap_or_else(|e| e.into_inner()) = Some(node);
         Ok(())

@@ -91,7 +91,15 @@ pub fn recommend(
         // For each model, find the best quantization that fits
         let mut best_for_model: Option<ModelRecommendation> = None;
 
-        for &quant in QUANT_LEVELS {
+        let mobile_quants: &[Quantization] =
+            &[Quantization::Q4KM, Quantization::Q4KS, Quantization::Q3KM];
+        let quant_candidates = if is_mobile {
+            mobile_quants
+        } else {
+            QUANT_LEVELS
+        };
+
+        for &quant in quant_candidates {
             let memory_bytes = estimate_memory(model, quant, 4096);
 
             if memory_bytes > effective_memory {
@@ -106,7 +114,11 @@ pub fn recommend(
 
             let quality = model.quality_score * quant.quality_retention();
             let speed_normalized = (tok_s as f64 / 100.0).min(1.0); // Normalize to 0-1
-            let score = quality * 0.6 + speed_normalized * 0.4;
+            let mut score = quality * 0.6 + speed_normalized * 0.4;
+            if is_mobile && model.params_billions <= 1.7 {
+                // Prioritize compact <=1.7B models on mobile so they load fast and never hit Android LMK
+                score += 0.20;
+            }
 
             let mut warnings = Vec::new();
 

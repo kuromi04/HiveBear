@@ -185,6 +185,18 @@ export function connectMeshPeer(peerAddr: string, modelName?: string): Promise<L
   return invoke("connect_mesh_peer", { peerAddr, modelName });
 }
 
+export interface DiscoveredMeshPeer {
+  node_id: string;
+  addr: string;
+  external_addr: string | null;
+  serving_model_id: string | null;
+  source: string;
+}
+
+export function discoverMeshPeers(): Promise<DiscoveredMeshPeer[]> {
+  return invoke("discover_mesh_peers", undefined, { silent: true });
+}
+
 // ── Chat Persistence ─────────────────────────────────────────────
 
 export function listConversations(): Promise<Conversation[]> {

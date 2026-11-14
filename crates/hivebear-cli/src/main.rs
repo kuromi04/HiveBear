@@ -1944,16 +1944,23 @@ async fn cmd_mesh(action: MeshAction) {
             };
 
             let security_mode = hivebear_mesh::MeshSecurityMode::default();
-            let transport = Arc::new(hivebear_mesh::transport::quic::QuicTransport::new(
-                identity.node_id.clone(),
-                security_mode,
-                None,
-            ));
-            let discovery = Arc::new(
+            let transport: Arc<dyn hivebear_mesh::transport::MeshTransport> =
+                Arc::new(hivebear_mesh::transport::quic::QuicTransport::new(
+                    identity.node_id.clone(),
+                    security_mode,
+                    None,
+                ));
+            let coordinator = Arc::new(
                 hivebear_mesh::discovery::server::CoordinationServerClient::new(
                     config.mesh.coordination_server.clone(),
                 ),
             );
+            let mut composite =
+                hivebear_mesh::discovery::composite::CompositeDiscovery::new(coordinator);
+            composite.add_source(Arc::new(hivebear_mesh::discovery::lan::LanDiscovery::new(
+                hivebear_mesh::discovery::lan::LAN_DISCOVERY_PORT,
+            )));
+            let discovery: Arc<dyn hivebear_mesh::discovery::PeerDiscovery> = Arc::new(composite);
 
             let reputation_path = Some(paths.data_dir.join("reputation.json"));
             let node = Arc::new(hivebear_mesh::MeshNode::with_identity(
@@ -1970,6 +1977,39 @@ async fn cmd_mesh(action: MeshAction) {
                 advertise_addr.set_ip(ip);
             }
 
+            // Detect and auto-load an installed local model so `hivebear mesh start` can serve P2P inference
+            let mut serving_model_id: Option<String> = None;
+            let mut loaded_worker: Option<(
+                Arc<Orchestrator>,
+                Arc<hivebear_inference::ModelHandle>,
+                String,
+            )> = None;
+            if let Ok(registry) = hivebear_registry::Registry::new(&config, &paths).await {
+                let models = registry.list_installed().await;
+                if let Some(first) = models.first() {
+                    if let Some(ref inst) = first.installed {
+                        let model_label = if !first.name.trim().is_empty() {
+                            first.name.clone()
+                        } else {
+                            first.id.clone()
+                        };
+                        serving_model_id = Some(model_label.clone());
+                        let orch = Arc::new(create_orchestrator(hw.clone()));
+                        let load_cfg = LoadConfig {
+                            context_length: 4096,
+                            offload: hivebear_inference::OffloadConfig {
+                                auto: true,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        };
+                        if let Ok(handle) = orch.load(&inst.path, &load_cfg).await {
+                            loaded_worker = Some((orch, Arc::new(handle), model_label));
+                        }
+                    }
+                }
+            }
+
             let local_info = hivebear_mesh::PeerInfo {
                 node_id: node.local_id.clone(),
                 hardware: hw.clone(),
@@ -1983,7 +2023,7 @@ async fn cmd_mesh(action: MeshAction) {
                 external_addr: None,
                 nat_type: hivebear_mesh::nat::NatType::Unknown,
                 latency_map: std::collections::HashMap::new(),
-                serving_model_id: None,
+                serving_model_id: serving_model_id.clone(),
                 swarm_id: None,
                 draft_capability: None,
             };
@@ -1992,6 +2032,28 @@ async fn cmd_mesh(action: MeshAction) {
                 Ok(()) => {
                     // Start background maintenance (heartbeat, discovery, health checks)
                     node.start_maintenance();
+
+                    if let Some((orch, handle, model_label)) = loaded_worker {
+                        let handler = Arc::new(CliInferenceHandler {
+                            orchestrator: orch.clone(),
+                            handle,
+                            model_name: model_label.clone(),
+                        });
+                        let pipeline_h = Arc::new(pipeline_handler::CliPipelineHandler::new(orch));
+                        let daemon =
+                            hivebear_mesh::pipeline::daemon::MeshWorkerDaemon::with_pipeline(
+                                handler,
+                                transport.clone(),
+                                pipeline_h,
+                            );
+                        tokio::spawn(async move {
+                            daemon.run().await;
+                        });
+                        println!(
+                            "{}",
+                            format!("Serving model over Mesh: {model_label}").cyan()
+                        );
+                    }
 
                     println!(
                         "{}",
@@ -2115,6 +2177,7 @@ async fn cmd_mesh(action: MeshAction) {
 struct CliInferenceHandler {
     orchestrator: std::sync::Arc<Orchestrator>,
     handle: std::sync::Arc<hivebear_inference::ModelHandle>,
+    model_name: String,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -2130,17 +2193,22 @@ impl hivebear_mesh::MeshInferenceHandler for CliInferenceHandler {
         std::pin::Pin<Box<dyn futures::Stream<Item = std::result::Result<String, String>> + Send>>,
         String,
     > {
+        if model_id == "__probe__" || max_tokens == 0 {
+            let info = self.model_name.clone();
+            return Ok(Box::pin(futures::stream::once(async move { Ok(info) })));
+        }
+
         let messages: Vec<ChatMessage> =
             serde_json::from_str(messages_json).map_err(|e| format!("Bad messages JSON: {e}"))?;
 
         let req = GenerateRequest {
             messages,
-            max_tokens,
+            max_tokens: max_tokens.max(1),
             sampling: SamplingParams {
                 temperature,
                 ..Default::default()
             },
-            model_name: Some(model_id.to_string()),
+            model_name: Some(self.model_name.clone()),
             ..Default::default()
         };
 
@@ -2179,18 +2247,18 @@ async fn cmd_mesh_run(
 
     // ── Resolve target peer address ─────────────────────────────────
     let config = hivebear_core::Config::load();
-    let peer_addr: std::net::SocketAddr = if let Some(ref peer_str) = peer_override {
+    let candidate_addrs: Vec<std::net::SocketAddr> = if let Some(ref peer_str) = peer_override {
         let addr_str = if peer_str.contains(':') {
             peer_str.clone()
         } else {
             format!("{peer_str}:7878")
         };
         match addr_str.parse() {
-            Ok(sa) => sa,
+            Ok(sa) => vec![sa],
             Err(_) => match tokio::net::lookup_host(&addr_str).await {
-                Ok(mut addrs) => match addrs.next() {
-                    Some(sa) => sa,
-                    None => {
+                Ok(addrs) => {
+                    let list: Vec<std::net::SocketAddr> = addrs.collect();
+                    if list.is_empty() {
                         eprintln!(
                             "{}: Could not resolve peer address '{}'",
                             "Error".red().bold(),
@@ -2198,7 +2266,8 @@ async fn cmd_mesh_run(
                         );
                         return;
                     }
-                },
+                    list
+                }
                 Err(e) => {
                     eprintln!(
                         "{}: Invalid peer address '{}': {e}",
@@ -2210,16 +2279,27 @@ async fn cmd_mesh_run(
             },
         }
     } else {
-        let discovery = Arc::new(
+        use hivebear_mesh::discovery::PeerDiscovery;
+        let coordinator = Arc::new(
             hivebear_mesh::discovery::server::CoordinationServerClient::new(
                 config.mesh.coordination_server.clone(),
             ),
         );
-        let peers = discovery.find_peers("", 0).await.unwrap_or_default();
+        let lan = Arc::new(hivebear_mesh::discovery::lan::LanDiscovery::new(
+            hivebear_mesh::discovery::lan::LAN_DISCOVERY_PORT,
+        ));
+        let mut peers = lan.find_peers("", 0).await.unwrap_or_default();
+        if let Ok(coord_peers) = coordinator.find_peers("", 0).await {
+            for cp in coord_peers {
+                if !peers.iter().any(|p| p.node_id == cp.node_id) {
+                    peers.push(cp);
+                }
+            }
+        }
         if peers.is_empty() {
             eprintln!(
-                "{}: No active peers found on the coordinator ({}).\n\
-                 Tip: Start your PC contributor node (`hivebear contribute`), or connect directly using `--peer <IP>:<PORT>`.",
+                "{}: No active peers found on LAN or coordinator ({}).\n\
+                 Tip: Start your PC contributor node (`hivebear contribute` or enable Mesh in Desktop), or connect directly using `--peer <IP>:<PORT>`.",
                 "Mesh".bold().yellow(),
                 config.mesh.coordination_server
             );
@@ -2227,23 +2307,40 @@ async fn cmd_mesh_run(
         }
 
         println!(
-            "{} {} peer(s) available on coordinator — routing to best peer",
+            "{} {} peer(s) available on Mesh — routing to best peer",
             "Mesh:".bold().magenta(),
             peers.len()
         );
 
-        // Prefer a peer advertising the target model
+        // Prefer a peer advertising the target model (or any model if remote_model/auto)
         let matching = peers.iter().find(|p| {
             p.serving_model_id
                 .as_ref()
-                .map(|m| m.contains(&target_model_id) || target_model_id.contains(m))
+                .map(|m| {
+                    target_model_id == "remote_model"
+                        || target_model_id == "auto"
+                        || m.to_lowercase().contains(&target_model_id.to_lowercase())
+                        || target_model_id.to_lowercase().contains(&m.to_lowercase())
+                })
                 .unwrap_or(false)
         });
         let chosen = matching.unwrap_or(&peers[0]);
-        chosen.external_addr.unwrap_or(chosen.addr)
+        let mut addrs = Vec::new();
+        if !chosen.addr.ip().is_unspecified() && !chosen.addr.ip().is_loopback() {
+            addrs.push(chosen.addr);
+        }
+        if let Some(ext) = chosen.external_addr {
+            if !addrs.contains(&ext) {
+                addrs.push(ext);
+            }
+        }
+        if addrs.is_empty() {
+            addrs.push(chosen.addr);
+        }
+        addrs
     };
 
-    if true {
+    if !candidate_addrs.is_empty() {
         // Create identity and QUIC transport for the client side
         let paths = hivebear_core::config::paths::AppPaths::new();
         let identity_path = paths.data_dir.join("node_identity.key");
@@ -2257,9 +2354,24 @@ async fn cmd_mesh_run(
                 None,
             ));
 
-        // Connect to the peer
-        match transport.connect(peer_addr).await {
-            Ok(peer_id) => {
+        // Connect to the first reachable candidate peer address (LAN first, then external)
+        let mut connected: Option<(hivebear_mesh::NodeId, std::net::SocketAddr)> = None;
+        let mut last_err = None;
+        for addr in &candidate_addrs {
+            match tokio::time::timeout(std::time::Duration::from_secs(5), transport.connect(*addr))
+                .await
+            {
+                Ok(Ok(peer_id)) => {
+                    connected = Some((peer_id, *addr));
+                    break;
+                }
+                Ok(Err(e)) => last_err = Some(e.to_string()),
+                Err(_) => last_err = Some(format!("Connection timed out to {addr}")),
+            }
+        }
+
+        match connected {
+            Some((peer_id, peer_addr)) => {
                 println!(
                     "{} Connected to peer {} at {}",
                     "Mesh:".bold().magenta(),
@@ -2403,9 +2515,10 @@ async fn cmd_mesh_run(
 
                 return;
             }
-            Err(e) => {
+            None => {
+                let err_msg = last_err.unwrap_or_else(|| "unreachable".to_string());
                 println!(
-                    "{} Failed to connect to peer: {e}. Falling back to local inference.",
+                    "{} Failed to connect to peer ({err_msg}). Falling back to local inference.",
                     "Mesh:".yellow()
                 );
             }
@@ -2464,6 +2577,7 @@ async fn cmd_mesh_run(
     let _handler = Arc::new(CliInferenceHandler {
         orchestrator: Arc::new(create_orchestrator(hw)),
         handle: Arc::new(handle.clone()),
+        model_name: model.clone(),
     });
 
     if let Some(prompt_text) = prompt {
@@ -2607,8 +2721,23 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
     );
     println!();
 
-    // Step 2: Determine model
-    let model_id = model_override.unwrap_or_else(|| plan.recommended_model.clone());
+    // Step 2: Determine model (fall back to any installed local model if recommended is not installed)
+    let mut model_id = model_override
+        .clone()
+        .unwrap_or_else(|| plan.recommended_model.clone());
+    if model_override.is_none() {
+        let candidate_path = registry_commands::resolve_model(&model_id, &hw).await;
+        if !std::path::Path::new(&candidate_path).exists() {
+            let config = hivebear_core::Config::load();
+            let paths = hivebear_core::AppPaths::new();
+            if let Ok(registry) = hivebear_registry::Registry::new(&config, &paths).await {
+                let installed = registry.list_installed().await;
+                if let Some(first) = installed.first() {
+                    model_id = first.id.clone();
+                }
+            }
+        }
+    }
     println!("{}", "Step 2/4: Selecting model...".cyan());
     println!(
         "  {} {} ({})",
@@ -2629,6 +2758,9 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
     let coordinator = std::sync::Arc::new(
         hivebear_mesh::discovery::server::CoordinationServerClient::new(coordinator_url.clone()),
     );
+    let lan_discovery = std::sync::Arc::new(hivebear_mesh::discovery::lan::LanDiscovery::new(
+        hivebear_mesh::discovery::lan::LAN_DISCOVERY_PORT,
+    ));
 
     let identity_path = hivebear_core::AppPaths::new()
         .data_dir
@@ -2675,11 +2807,16 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
         );
         eprintln!("{}", "Running in standalone mode.".dimmed());
     }
+    {
+        use hivebear_mesh::discovery::PeerDiscovery;
+        let _ = lan_discovery.register(&local_info).await;
+    }
 
     // Spawn continuous heartbeat task (every 25s) so the coordinator does not prune the node after 60s
     let hb_cancel = std::sync::Arc::new(tokio::sync::Notify::new());
     let hb_cancel_clone = hb_cancel.clone();
     let hb_coord = coordinator.clone();
+    let hb_lan = lan_discovery.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(25));
         interval.tick().await; // skip initial immediate tick
@@ -2689,6 +2826,7 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
                 _ = interval.tick() => {
                     use hivebear_mesh::discovery::PeerDiscovery;
                     let _ = hb_coord.heartbeat().await;
+                    let _ = hb_lan.heartbeat().await;
                 }
             }
         }
@@ -2805,6 +2943,7 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
     let handler = std::sync::Arc::new(CliInferenceHandler {
         orchestrator: orchestrator.clone(),
         handle: handle.clone(),
+        model_name: model_id.clone(),
     });
 
     // Create QUIC transport and start listening

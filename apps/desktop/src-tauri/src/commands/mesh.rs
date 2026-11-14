@@ -54,14 +54,21 @@ pub fn save_mesh_config(state: State<'_, AppState>, mut mesh_config: MeshConfig)
     // added, and a trailing slash is removed (it used to turn `/register` into
     // `//register` -> 404).
     mesh_config.coordination_server = mesh_config.normalized_coordination_server();
-    let mut config = state
-        .config
-        .lock()
-        .map_err(|_| String::from("Config lock poisoned"))?;
-    config.mesh = mesh_config;
-    config
-        .save()
-        .map_err(|e| format!("Failed to save config: {e}"))
+    let enabled = mesh_config.enabled;
+    {
+        let mut config = state
+            .config
+            .lock()
+            .map_err(|_| String::from("Config lock poisoned"))?;
+        config.mesh = mesh_config;
+        config
+            .save()
+            .map_err(|e| format!("Failed to save config: {e}"))?;
+    }
+    if enabled {
+        let _ = state.start_mesh();
+    }
+    Ok(())
 }
 
 // ── Mesh lifecycle commands ────────────────────────────────────────
@@ -135,6 +142,183 @@ pub fn get_mesh_connection_status(state: State<'_, AppState>) -> CmdResult<MeshC
     }
 }
 
+#[derive(Serialize, Clone)]
+pub struct DiscoveredMeshPeer {
+    pub node_id: String,
+    pub addr: String,
+    pub external_addr: Option<String>,
+    pub serving_model_id: Option<String>,
+    pub ram_bytes: u64,
+    pub vram_bytes: u64,
+    pub is_lan: bool,
+    pub source: String,
+}
+
+/// Probe a remote peer over QUIC to verify reachability and detect its active/installed model name.
+async fn probe_peer_model(
+    state: &AppState,
+    peer_addr: std::net::SocketAddr,
+    timeout_ms: u64,
+) -> Result<Option<String>, String> {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let identity_path = state.paths.data_dir.join("node_identity.key");
+    let identity = hivebear_mesh::NodeIdentity::load_or_generate(&identity_path)
+        .unwrap_or_else(|_| hivebear_mesh::NodeIdentity::generate());
+    let security_mode = hivebear_mesh::MeshSecurityMode::default();
+    let transport: Arc<dyn hivebear_mesh::transport::MeshTransport> =
+        Arc::new(hivebear_mesh::transport::quic::QuicTransport::new(
+            identity.node_id.clone(),
+            security_mode,
+            None,
+        ));
+
+    let peer_id = tokio::time::timeout(
+        Duration::from_millis(timeout_ms),
+        transport.connect(peer_addr),
+    )
+    .await
+    .map_err(|_| {
+        format!(
+            "Tiempo de espera agotado al conectar con {peer_addr}. Verifica que tu PC y móvil estén en el mismo WiFi y que HiveBear tenga 'P2P Mesh' activo en la PC."
+        )
+    })?
+    .map_err(|e| {
+        format!(
+            "No se pudo conectar al nodo en {peer_addr}: {e}. Verifica que HiveBear esté ejecutándose en la PC con Mesh activado."
+        )
+    })?;
+
+    let req_msg = hivebear_mesh::transport::protocol::MeshMessage::InferenceRequest {
+        session_id: uuid::Uuid::new_v4(),
+        model_id: "__probe__".into(),
+        messages_json: "[]".into(),
+        max_tokens: 0,
+        temperature: 0.0,
+        top_p: 1.0,
+    };
+
+    transport
+        .send(&peer_id, req_msg)
+        .await
+        .map_err(|e| format!("Error al enviar sonda al nodo {peer_addr}: {e}"))?;
+
+    let mut detected_model: Option<String> = None;
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(timeout_ms);
+
+    while let Ok(recv_res) = tokio::time::timeout_at(deadline, transport.recv()).await {
+        match recv_res {
+            Ok((
+                _from,
+                hivebear_mesh::transport::protocol::MeshMessage::InferenceToken {
+                    text,
+                    is_done,
+                    ..
+                },
+            )) => {
+                if !text.trim().is_empty() {
+                    detected_model = Some(text.trim().to_string());
+                }
+                if is_done {
+                    break;
+                }
+            }
+            Ok((
+                _from,
+                hivebear_mesh::transport::protocol::MeshMessage::InferenceComplete {
+                    error, ..
+                },
+            )) => {
+                if let Some(err) = error {
+                    return Err(err);
+                }
+                break;
+            }
+            Ok((_from, hivebear_mesh::transport::protocol::MeshMessage::Error { message, .. })) => {
+                return Err(message);
+            }
+            Err(_) => break,
+            _ => {}
+        }
+    }
+
+    let _ = transport.disconnect(&peer_id).await;
+    Ok(detected_model)
+}
+
+/// Discover active P2P Mesh peers on LAN (UDP broadcast) and Coordinator, including their served models.
+#[tauri::command]
+pub async fn discover_mesh_peers(state: State<'_, AppState>) -> CmdResult<Vec<DiscoveredMeshPeer>> {
+    // Ensure local mesh node is running so LanDiscovery (UDP 7877) is active
+    let _ = state.start_mesh();
+
+    let node_opt = {
+        let guard = state.mesh_node.lock().unwrap_or_else(|e| e.into_inner());
+        guard.clone()
+    };
+
+    let Some(node) = node_opt else {
+        return Ok(Vec::new());
+    };
+
+    let mut peer_map: std::collections::HashMap<String, hivebear_mesh::PeerInfo> =
+        std::collections::HashMap::new();
+
+    for entry in node.peers.iter() {
+        let (info, _) = entry.value();
+        if info.node_id != node.local_id {
+            peer_map.insert(info.node_id.to_hex(), info.clone());
+        }
+    }
+
+    if let Ok(found) = node.discovery.find_peers("", 0).await {
+        for p in found {
+            if p.node_id != node.local_id {
+                peer_map.entry(p.node_id.to_hex()).or_insert(p);
+            }
+        }
+    }
+
+    let mut list = Vec::new();
+    for (hex_id, mut info) in peer_map {
+        let is_lan = match info.addr.ip() {
+            std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_loopback() || v4.is_link_local(),
+            std::net::IpAddr::V6(v6) => v6.is_loopback(),
+        };
+        if info.serving_model_id.is_none() {
+            if let Ok(Some(model)) = probe_peer_model(&state, info.addr, 1500).await {
+                info.serving_model_id = Some(model);
+            }
+        }
+        let source = if is_lan {
+            "LAN WiFi".to_string()
+        } else {
+            "Coordinator".to_string()
+        };
+        list.push(DiscoveredMeshPeer {
+            node_id: hex_id,
+            addr: info.addr.to_string(),
+            external_addr: info.external_addr.map(|a| a.to_string()),
+            serving_model_id: info.serving_model_id,
+            ram_bytes: info.available_memory_bytes,
+            vram_bytes: info.available_vram_bytes,
+            is_lan,
+            source,
+        });
+    }
+
+    // Sort LAN peers and peers with known models first
+    list.sort_by(|a, b| {
+        b.serving_model_id
+            .is_some()
+            .cmp(&a.serving_model_id.is_some())
+            .then_with(|| b.is_lan.cmp(&a.is_lan))
+    });
+
+    Ok(list)
+}
+
 /// Connect directly to a mesh peer node to offload inference.
 #[tauri::command]
 pub async fn connect_mesh_peer(
@@ -142,10 +326,16 @@ pub async fn connect_mesh_peer(
     peer_addr: String,
     model_name: Option<String>,
 ) -> CmdResult<crate::commands::inference::LoadedModel> {
-    let addr_str = if peer_addr.contains(':') {
-        peer_addr.clone()
+    let cleaned = peer_addr
+        .trim()
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_end_matches('/');
+
+    let addr_str = if cleaned.contains(':') {
+        cleaned.to_string()
     } else {
-        format!("{peer_addr}:7878")
+        format!("{cleaned}:7878")
     };
 
     let sa: std::net::SocketAddr = match addr_str.parse() {
@@ -153,17 +343,28 @@ pub async fn connect_mesh_peer(
         Err(_) => match tokio::net::lookup_host(&addr_str).await {
             Ok(mut addrs) => match addrs.next() {
                 Some(a) => a,
-                None => return Err(format!("Could not resolve peer address '{}'", peer_addr)),
+                None => return Err(format!("No se pudo resolver la dirección '{peer_addr}'")),
             },
-            Err(e) => return Err(format!("Invalid peer address '{}': {e}", peer_addr)),
+            Err(e) => return Err(format!("Dirección de nodo inválida '{peer_addr}': {e}")),
         },
     };
 
+    // Probe the peer to verify QUIC reachability and auto-detect the model running on the PC
+    let probed_model = probe_peer_model(&state, sa, 4000).await?;
+
+    let provided = model_name.map(|s| s.trim().to_string()).filter(|s| {
+        !s.is_empty()
+            && !matches!(
+                s.to_lowercase().as_str(),
+                "pc remote model" | "remote model" | "remote pc" | "remote_model" | "desconocido"
+            )
+    });
+
+    let name = probed_model
+        .or(provided)
+        .unwrap_or_else(|| "Modelo Remoto PC".into());
+
     let handle_id = 0x8000_0000_0000_0000 | (rand::random::<u32>() as u64);
-    let name = model_name
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "Remote Model".into());
 
     let session = crate::state::MeshPeerSession {
         handle_id,

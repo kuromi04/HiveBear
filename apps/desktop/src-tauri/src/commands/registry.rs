@@ -16,9 +16,13 @@ pub async fn search_models(
         .map_err(crate::error::CommandError::from)?;
 
     // On mobile (where only Candle is available), filter out incompatible architectures
-    // when browsing (empty query), so mobile users only see models they can actually run.
-    let is_mobile = cfg!(target_os = "android") || state.profile.platform.os == "android";
-    if is_mobile && query.trim().is_empty() {
+    // and oversized models (>3.5B) so mobile users only see models they can actually run.
+    let is_mobile = cfg!(target_os = "android")
+        || cfg!(target_os = "ios")
+        || state.profile.platform.is_mobile
+        || state.profile.platform.os == "android"
+        || state.profile.platform.os == "ios";
+    if is_mobile {
         results.retain(|r| r.compatibility_score.unwrap_or(0.0) > 0.0);
     }
 
@@ -39,27 +43,37 @@ pub async fn install_model(
         || state.profile.platform.os == "ios";
     if is_mobile {
         let builtins = hivebear_core::recommender::model_db::builtin_models();
-        if let Some(entry) = builtins.iter().find(|e| e.id == model_id) {
+        let id_lower = model_id.to_lowercase();
+        if let Some(entry) = builtins.iter().find(|e| {
+            e.id == model_id
+                || e.huggingface_id
+                    .as_deref()
+                    .and_then(|hf| hf.rsplit('/').next())
+                    .map(|slug| slug.to_lowercase() == id_lower)
+                    .unwrap_or(false)
+        }) {
             if !entry.candle_compatible {
                 return Err(crate::error::CommandError {
                     message: format!(
-                        "Model '{}' cannot run locally on mobile (Candle engine only supports Llama/Mistral architectures). \
-                         Please install a Llama model (e.g. Llama 3.2 1B or 3B), or use Mesh to run this model from your PC.",
+                        "Model '{}' cannot run locally on mobile (Candle engine supports Llama, Qwen2.5, Mistral, SmolLM2, TinyLlama, and Phi-3 architectures). \
+                         Please install a compatible model (e.g. Qwen 2.5 0.5B/1.5B or Llama 3.2 1B), or use Mesh to run this model from your PC.",
                         entry.name
                     ),
                     code: crate::error::ErrorCode::RegistryError,
-                }.into());
+                }
+                .into());
             }
             if entry.params_billions > 3.5 {
                 return Err(crate::error::CommandError {
                     message: format!(
                         "Model '{}' ({:.1}B parameters) is too large to run locally on mobile. \
-                         Mobile devices support models up to 3.5B (e.g. Llama 3.2 1B or 3B). \
+                         Mobile devices support models up to 3.5B (e.g. Qwen 2.5 0.5B/1.5B or Llama 3.2 1B/3B). \
                          You can run this model on your PC and access it from mobile via HiveBear Mesh.",
                         entry.name, entry.params_billions
                     ),
                     code: crate::error::ErrorCode::RegistryError,
-                }.into());
+                }
+                .into());
             }
         }
     }

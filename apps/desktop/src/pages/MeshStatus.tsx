@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getMeshStatus, saveMeshConfig, getMeshConfig, getMeshConnectionStatus, joinMesh, leaveMesh, connectMeshPeer } from "../lib/invoke";
+import { getMeshStatus, saveMeshConfig, getMeshConfig, getMeshConnectionStatus, joinMesh, leaveMesh, connectMeshPeer, discoverMeshPeers } from "../lib/invoke";
 import { useNavigate } from "react-router-dom";
 import type { MeshConnectionStatus } from "../lib/invoke";
 import type { MeshStatus as MeshStatusType } from "../types";
@@ -77,14 +77,14 @@ export default function MeshStatus() {
 
         {/* Status header */}
         <Card padding="lg">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <div className={[
-              "flex h-12 w-12 items-center justify-center rounded-[var(--radius-lg)]",
+              "flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-lg)]",
               status.enabled ? "bg-success/10 text-success" : "bg-surface-overlay text-text-muted",
             ].join(" ")}>
               <Network size={24} />
             </div>
-            <div className="flex-1">
+            <div className="min-w-[180px] flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-base font-medium">
                   Mesh {status.enabled ? "Enabled" : "Disabled"}
@@ -120,8 +120,8 @@ export default function MeshStatus() {
         {/* Contribution */}
         <Card>
           <h2 className="mb-3 text-sm font-semibold">Resource Contribution</h2>
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="min-w-[180px] flex-1">
               <div className="mb-1 flex justify-between text-xs">
                 <span className="text-text-muted">Share limit</span>
                 <span className="font-mono text-text-secondary">
@@ -132,7 +132,7 @@ export default function MeshStatus() {
                 <div className="h-full rounded-full bg-paw-500 interactive-hover" style={{ width: `${status.max_contribution_percent * 100}%` }} />
               </div>
             </div>
-            <p className="max-w-48 text-xs text-text-muted">
+            <p className="text-xs text-text-muted sm:max-w-48">
               Maximum percentage of local resources shared with the mesh network.
             </p>
           </div>
@@ -141,14 +141,14 @@ export default function MeshStatus() {
         {/* Connection status */}
         {status.enabled && connection && (
           <Card padding="lg">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <div className={[
-                "flex h-12 w-12 items-center justify-center rounded-[var(--radius-lg)]",
+                "flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-lg)]",
                 connection.running ? "bg-success/10 text-success" : "bg-surface-overlay text-text-muted",
               ].join(" ")}>
                 {connection.running ? <Wifi size={24} /> : <WifiOff size={24} />}
               </div>
-              <div className="flex-1">
+              <div className="min-w-[180px] flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-base font-medium">
                     {!connection.running
@@ -258,6 +258,7 @@ interface CoordinatorNode {
   tier: string;
   ram_bytes: number;
   vram_bytes: number;
+  serving_model_id?: string | null;
   karma?: number;
 }
 
@@ -268,16 +269,55 @@ function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string })
   const [error, setError] = useState<string | null>(null);
 
   const fetchDashboard = useCallback(async () => {
+    setLoading(true);
+    let merged: CoordinatorNode[] = [];
+    let coordErr: string | null = null;
+
+    try {
+      const lanPeers = await discoverMeshPeers();
+      for (const p of lanPeers) {
+        merged.push({
+          node_id: p.node_id,
+          addr: p.addr,
+          tier: p.source,
+          ram_bytes: 0,
+          vram_bytes: 0,
+          serving_model_id: p.serving_model_id,
+          karma: 0,
+        });
+      }
+    } catch {
+      // ignore LAN discovery error
+    }
+
     try {
       const target = coordinatorUrl.replace(/\/+$/, "");
       const res = await fetch(`${target}/dashboard`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setNodes(data.nodes || []);
+      const coordNodes: CoordinatorNode[] = data.nodes || [];
+      for (const cn of coordNodes) {
+        const existingIdx = merged.findIndex((m) => m.node_id === cn.node_id);
+        if (existingIdx >= 0) {
+          merged[existingIdx] = {
+            ...cn,
+            addr: merged[existingIdx].addr || cn.addr,
+            serving_model_id: merged[existingIdx].serving_model_id || cn.serving_model_id,
+          };
+        } else {
+          merged.push(cn);
+        }
+      }
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error connecting to coordinator");
+      coordErr = e instanceof Error ? e.message : "Error connecting to coordinator";
+      if (merged.length === 0) {
+        setError(coordErr);
+      } else {
+        setError(null);
+      }
     } finally {
+      setNodes(merged);
       setLoading(false);
     }
   }, [coordinatorUrl]);
@@ -290,16 +330,16 @@ function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string })
 
   return (
     <Card>
-      <div className="flex items-center justify-between mb-4 border-b border-border pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4 border-b border-border pb-3">
         <div>
-          <h2 className="text-sm font-semibold flex items-center gap-2">
+          <h2 className="text-sm font-semibold flex flex-wrap items-center gap-2">
             <span>⚡ Network Swarm & Karma Leaderboard</span>
             <span className="text-[10px] bg-paw-500/10 text-paw-500 border border-paw-500/30 px-2 py-0.5 rounded-full font-mono">
-              Live Cloud Coordinator
+              LAN + Cloud Coordinator
             </span>
           </h2>
           <p className="text-xs text-text-muted mt-0.5">
-            Active peer nodes sharing compute across the decentralized mesh.
+            Active peer nodes sharing compute across WiFi LAN and the decentralized mesh.
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={fetchDashboard} disabled={loading}>
@@ -307,13 +347,13 @@ function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string })
         </Button>
       </div>
 
-      {error ? (
+      {error && nodes.length === 0 ? (
         <div className="rounded-[var(--radius-md)] bg-surface-overlay p-4 text-xs text-text-muted text-center">
           Coordinator offline or unreachable: <span className="font-mono text-danger">{error}</span>
         </div>
       ) : nodes.length === 0 ? (
         <div className="rounded-[var(--radius-md)] bg-surface-overlay p-6 text-center text-xs text-text-muted">
-          No nodes are registered on <span className="font-mono">{coordinatorUrl}</span> right now.
+          No nodes are registered on LAN or <span className="font-mono">{coordinatorUrl}</span> right now.
           If your own node is not listed either, press Join above — with nobody else online,
           0 connected peers is the expected result, not a failure.
         </div>
@@ -322,53 +362,47 @@ function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string })
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-border/60 text-text-muted">
-                <th className="pb-2 font-medium">Node ID</th>
-                <th className="pb-2 font-medium">Address</th>
-                <th className="pb-2 font-medium">RAM / VRAM</th>
-                <th className="pb-2 font-medium text-right">Karma Balance</th>
-                <th className="pb-2 font-medium text-right">Priority Tier</th>
+                <th className="pb-2 pr-2 font-medium">Node ID</th>
+                <th className="pb-2 pr-2 font-medium">Address</th>
+                <th className="pb-2 pr-2 font-medium">Model</th>
+                <th className="pb-2 pr-2 font-medium">RAM / VRAM</th>
+                <th className="pb-2 pr-2 font-medium text-right">Karma</th>
                 <th className="pb-2 font-medium text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30 font-mono">
               {nodes.map((node) => {
                 const k = node.karma ?? 0;
-                const tier = k >= 500 ? "VIP_ALPHA" : k > 0 ? "CONTRIBUTOR" : "COMMUNITY";
                 return (
                   <tr key={node.node_id} className="hover:bg-surface-overlay/40 transition-colors">
-                    <td className="py-2.5 font-medium text-text-primary">
-                      {node.node_id.slice(0, 14)}…
+                    <td className="py-2.5 pr-2 font-medium text-text-primary">
+                      {node.node_id.slice(0, 12)}…
                     </td>
-                    <td className="py-2.5 text-text-muted">
+                    <td className="py-2.5 pr-2 text-text-muted">
                       {node.addr}
                     </td>
-                    <td className="py-2.5 text-text-secondary">
-                      {(node.ram_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB / {(node.vram_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB
+                    <td className="py-2.5 pr-2 font-sans text-paw-400">
+                      {node.serving_model_id || "Auto-detect"}
                     </td>
-                    <td className="py-2.5 text-right font-bold text-success">
+                    <td className="py-2.5 pr-2 text-text-secondary">
+                      {node.ram_bytes > 0
+                        ? `${(node.ram_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB / ${(node.vram_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+                        : node.tier}
+                    </td>
+                    <td className="py-2.5 pr-2 text-right font-bold text-success">
                       +{k} pts
                     </td>
-                    <td className="py-2.5 text-right">
-                      <span className={[
-                        "inline-block px-2 py-0.5 rounded text-[10px] font-sans font-semibold",
-                        tier === "VIP_ALPHA" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30"
-                          : tier === "CONTRIBUTOR" ? "bg-success/10 text-success border border-success/30"
-                          : "bg-surface-overlay text-text-muted"
-                      ].join(" ")}>
-                        {tier}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right">
+                    <td className="py-2.5 text-right font-sans">
                       <button
                         onClick={async () => {
                           try {
-                            await connectMeshPeer(node.addr, "Remote PC");
+                            await connectMeshPeer(node.addr, node.serving_model_id || undefined);
                             navigate("/chat");
                           } catch (e) {
                             console.error(e);
                           }
                         }}
-                        className="rounded-[var(--radius-md)] border border-paw-500/30 bg-paw-500/10 px-2 py-1 text-[11px] font-medium text-paw-400 hover:bg-paw-500/20"
+                        className="rounded-[var(--radius-md)] border border-paw-500/30 bg-paw-500/10 px-2.5 py-1 text-[11px] font-medium text-paw-400 hover:bg-paw-500/20"
                       >
                         Chatear
                       </button>

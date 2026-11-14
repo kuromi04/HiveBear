@@ -1,15 +1,15 @@
 import { useEffect, useSyncExternalStore, useState } from "react";
 import { getDeviceStatus, type DeviceStatus } from "../lib/invoke";
 
-/** Whether the viewport is mobile-sized (<640px). SSR-safe, sync, no flicker. */
+/** Whether the viewport is mobile-sized (<768px). SSR-safe, sync, no flicker. */
 export function useIsMobile() {
   return useSyncExternalStore(
     (callback) => {
-      const mq = window.matchMedia("(max-width: 639px)");
+      const mq = window.matchMedia("(max-width: 767px)");
       mq.addEventListener("change", callback);
       return () => mq.removeEventListener("change", callback);
     },
-    () => window.matchMedia("(max-width: 639px)").matches,
+    () => window.matchMedia("(max-width: 767px)").matches,
     () => false, // server snapshot fallback
   );
 }
