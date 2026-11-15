@@ -123,11 +123,21 @@ jobs:
           ln -sf "$TC/i686-linux-android24-clang" "$TC/i686-linux-android-clang" || true
           ln -sf "$TC/x86_64-linux-android24-clang" "$TC/x86_64-linux-android-clang" || true
 
-          # Ensure keystore is copied into app folder if present
+          # Ensure a universally valid release keystore exists (backdated to 2020 so all device clocks accept it)
+          mkdir -p packaging/android
           mkdir -p apps/desktop/src-tauri/gen/android/app
-          if [ -f packaging/android/release.keystore ]; then
-            cp packaging/android/release.keystore apps/desktop/src-tauri/gen/android/app/release.keystore
-          fi
+          rm -f packaging/android/release.keystore apps/desktop/src-tauri/gen/android/app/release.keystore
+          keytool -genkeypair -v \
+            -keystore packaging/android/release.keystore \
+            -alias hivebear \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -startdate "2020/01/01 00:00:00" \
+            -storepass hivebear123 \
+            -keypass hivebear123 \
+            -dname "CN=HiveBear, OU=HiveBear, O=HiveBear, L=San Francisco, ST=California, C=US"
+          cp packaging/android/release.keystore apps/desktop/src-tauri/gen/android/app/release.keystore
 
           cd apps/desktop
           sed -i 's/default = \[.*\]/default = \[\]/' src-tauri/Cargo.toml
@@ -170,11 +180,17 @@ jobs:
               mv "${apk}.aligned" "$apk"
             fi
 
-            # Sign if not verified
-            if ! $APKSIGNER verify "$apk" 2>/dev/null; then
-              echo "Signing $apk with $KEYSTORE..."
-              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:hivebear123 --key-pass pass:hivebear123 --ks-key-alias hivebear "$apk"
-            fi
+            # Always sign/re-sign with apksigner enforcing v1, v2, and v3
+            echo "Signing $apk with $KEYSTORE (v1 + v2 + v3 enabled)..."
+            $APKSIGNER sign \
+              --ks "$KEYSTORE" \
+              --ks-pass pass:hivebear123 \
+              --key-pass pass:hivebear123 \
+              --ks-key-alias hivebear \
+              --v1-signing-enabled true \
+              --v2-signing-enabled true \
+              --v3-signing-enabled true \
+              "$apk"
 
             # Verify signature strictly
             echo "Strict signature verification for $apk:"

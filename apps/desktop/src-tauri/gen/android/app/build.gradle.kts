@@ -38,6 +38,8 @@ android {
                 storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "hivebear123"
                 keyAlias = System.getenv("KEY_ALIAS") ?: "hivebear"
                 keyPassword = System.getenv("KEY_PASSWORD") ?: "hivebear123"
+                enableV1Signing = true
+                enableV2Signing = true
             }
         }
     }
