@@ -319,6 +319,9 @@ pub async fn discover_mesh_peers(state: State<'_, AppState>) -> CmdResult<Vec<Di
     Ok(list)
 }
 
+static MESH_HANDLE_COUNTER: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(100_000);
+
 /// Connect directly to a mesh peer node to offload inference.
 #[tauri::command]
 pub async fn connect_mesh_peer(
@@ -364,7 +367,8 @@ pub async fn connect_mesh_peer(
         .or(provided)
         .unwrap_or_else(|| "Modelo Remoto PC".into());
 
-    let handle_id = 0x8000_0000_0000_0000 | (rand::random::<u32>() as u64);
+    // Use a safe counter < 2^53 so JavaScript numbers never lose precision across Tauri invoke
+    let handle_id = MESH_HANDLE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
     let session = crate::state::MeshPeerSession {
         handle_id,
@@ -377,6 +381,7 @@ pub async fn connect_mesh_peer(
             .mesh_peer_connections
             .lock()
             .unwrap_or_else(|e| e.into_inner());
+        sessions.clear();
         sessions.insert(handle_id, session);
     }
 

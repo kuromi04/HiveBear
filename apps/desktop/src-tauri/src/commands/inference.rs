@@ -73,7 +73,16 @@ pub async fn stream_chat(
             .mesh_peer_connections
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        sessions.get(&handle_id).cloned()
+        sessions.get(&handle_id).cloned().or_else(|| {
+            // Robust fallback: if only 1 mesh peer is active or handle_id looks like a mesh handle, use it
+            if sessions.len() == 1 {
+                sessions.values().next().cloned()
+            } else if handle_id >= 100_000 || handle_id >= (1u64 << 50) {
+                sessions.values().next().cloned()
+            } else {
+                None
+            }
+        })
     };
 
     if let Some(session) = mesh_session {
@@ -163,6 +172,10 @@ pub async fn unload_model(state: State<'_, AppState>, handle_id: u64) -> CmdResu
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         if mesh_sessions.remove(&handle_id).is_some() {
+            return Ok(());
+        }
+        if (handle_id >= 100_000 || handle_id >= (1u64 << 50)) && !mesh_sessions.is_empty() {
+            mesh_sessions.clear();
             return Ok(());
         }
     }
@@ -255,40 +268,51 @@ async fn stream_mesh_peer_chat(
     let mut stream_error: Option<String> = None;
 
     loop {
-        match transport.recv().await {
-            Ok((
+        let recv_fut = tokio::time::timeout(std::time::Duration::from_secs(60), transport.recv());
+        match recv_fut.await {
+            Ok(Ok((
                 _from,
                 hivebear_mesh::transport::protocol::MeshMessage::InferenceToken {
                     text,
                     is_done,
                     ..
                 },
-            )) => {
+            ))) => {
                 if is_done {
                     break;
                 }
                 full_text.push_str(&text);
                 let _ = window.emit("chat-token", &text);
             }
-            Ok((
+            Ok(Ok((
                 _from,
                 hivebear_mesh::transport::protocol::MeshMessage::InferenceComplete {
                     error, ..
                 },
-            )) => {
+            ))) => {
                 if let Some(err) = error {
                     let _ = window.emit("chat-error", &err);
                     stream_error = Some(err);
                 }
                 break;
             }
-            Ok((_from, hivebear_mesh::transport::protocol::MeshMessage::Error { message, .. })) => {
+            Ok(Ok((
+                _from,
+                hivebear_mesh::transport::protocol::MeshMessage::Error { message, .. },
+            ))) => {
                 let _ = window.emit("chat-error", &message);
                 stream_error = Some(message);
                 break;
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 let err_str = e.to_string();
+                let _ = window.emit("chat-error", &err_str);
+                stream_error = Some(err_str);
+                break;
+            }
+            Err(_) => {
+                let err_str =
+                    "Tiempo de espera agotado esperando respuesta del nodo PC remoto.".to_string();
                 let _ = window.emit("chat-error", &err_str);
                 stream_error = Some(err_str);
                 break;
@@ -297,6 +321,7 @@ async fn stream_mesh_peer_chat(
         }
     }
 
+    let _ = transport.disconnect(&peer_id).await;
     let _ = window.emit("chat-done", ());
 
     if full_text.trim().is_empty() {
