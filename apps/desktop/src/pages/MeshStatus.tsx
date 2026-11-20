@@ -233,10 +233,88 @@ export default function MeshStatus() {
           </Card>
         )}
 
+        {/* Direct P2P Local WiFi / LAN Connection */}
+        <DirectPeerConnectCard />
+
         {/* Live Network Karma & Peers Leaderboard */}
         <NetworkKarmaLeaderboard coordinatorUrl={connection?.coordinator_url ?? status.coordination_server} />
       </div>
     </Surface>
+  );
+}
+
+function DirectPeerConnectCard() {
+  const navigate = useNavigate();
+  const [peerInput, setPeerInput] = useState(() => {
+    return localStorage.getItem("last_mesh_peer") || "192.168.0.4:7878";
+  });
+  const [connecting, setConnecting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ isError: boolean; text: string } | null>(null);
+
+  const handleConnect = useCallback(async () => {
+    const target = peerInput.trim();
+    if (!target) return;
+    setConnecting(true);
+    setStatusMsg(null);
+    try {
+      localStorage.setItem("last_mesh_peer", target);
+      const res = await connectMeshPeer(target);
+      setStatusMsg({
+        isError: false,
+        text: `¡Conectado exitosamente con ${res.model_path}! Redirigiendo al chat...`,
+      });
+      setTimeout(() => navigate("/chat"), 600);
+    } catch (err: any) {
+      setStatusMsg({
+        isError: true,
+        text: typeof err === "string" ? err : err?.message || "Error al conectar al nodo PC",
+      });
+    } finally {
+      setConnecting(false);
+    }
+  }, [peerInput, navigate]);
+
+  return (
+    <Card padding="lg">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold flex items-center gap-1.5">
+              <span>🔗 Conectar a Nodo PC (WiFi / LAN)</span>
+            </h2>
+            <Badge variant="accent">P2P Directo</Badge>
+          </div>
+          <span className="text-[11px] text-text-muted">Sin necesidad de internet</span>
+        </div>
+
+        <p className="text-xs text-text-muted">
+          Ingresa la IP local de tu PC para chatear usando su procesador y modelo de IA directamente:
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-2 mt-1">
+          <input
+            type="text"
+            value={peerInput}
+            onChange={(e) => setPeerInput(e.target.value)}
+            placeholder="ej. 192.168.0.4:7878"
+            className="flex-1 rounded-[var(--radius-md)] border border-border bg-surface-overlay px-3 py-2 text-xs font-mono text-text-primary focus:border-paw-500 focus:outline-none"
+          />
+          <Button
+            variant="primary"
+            disabled={connecting || !peerInput.trim()}
+            onClick={handleConnect}
+          >
+            {connecting ? "Conectando…" : "Conectar y Chatear"}
+          </Button>
+        </div>
+
+        {statusMsg && (
+          <p className={`text-xs ${statusMsg.isError ? "text-danger" : "text-success"}`}>
+            {statusMsg.text}
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -347,15 +425,18 @@ function NetworkKarmaLeaderboard({ coordinatorUrl }: { coordinatorUrl: string })
         </Button>
       </div>
 
-      {error && nodes.length === 0 ? (
-        <div className="rounded-[var(--radius-md)] bg-surface-overlay p-4 text-xs text-text-muted text-center">
-          Coordinator offline or unreachable: <span className="font-mono text-danger">{error}</span>
-        </div>
-      ) : nodes.length === 0 ? (
-        <div className="rounded-[var(--radius-md)] bg-surface-overlay p-6 text-center text-xs text-text-muted">
-          No nodes are registered on LAN or <span className="font-mono">{coordinatorUrl}</span> right now.
-          If your own node is not listed either, press Join above — with nobody else online,
-          0 connected peers is the expected result, not a failure.
+      {nodes.length === 0 ? (
+        <div className="rounded-[var(--radius-md)] bg-surface-overlay p-5 text-center text-xs text-text-muted space-y-1.5">
+          <p className="font-medium text-text-secondary">Modo Red Local WiFi (P2P)</p>
+          <p>
+            No se detectaron otros nodos automáticamente por broadcast.
+            Usa el cuadro de arriba para conectarte directamente a tu PC (ej. <span className="font-mono text-paw-400">192.168.0.4:7878</span>).
+          </p>
+          {error && (
+            <p className="text-[11px] text-text-muted/70 mt-1">
+              (Coordinador en la nube no disponible; operando 100% en red local)
+            </p>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto">
