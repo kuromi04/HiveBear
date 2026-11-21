@@ -2516,7 +2516,28 @@ async fn cmd_mesh_run(
                 return;
             }
             None => {
-                let err_msg = last_err.unwrap_or_else(|| "unreachable".to_string());
+                let err_msg = last_err.unwrap_or_else(|| "unreachable or connection timed out".to_string());
+                if let Some(ref peer_str) = peer_override {
+                    eprintln!(
+                        "{}: Failed to connect to remote mesh peer at '{}': {err_msg}",
+                        "Error".red().bold(),
+                        peer_str
+                    );
+                    eprintln!(
+                        "Tip: Verify that HiveBear is running on your PC with 'P2P Mesh' enabled (port 7878 UDP) and that both devices are on the same WiFi network."
+                    );
+                    return;
+                }
+                if target_model_id == "remote_model" || target_model_id == "auto" {
+                    eprintln!(
+                        "{}: No remote mesh peer answered ({err_msg}).",
+                        "Error".red().bold()
+                    );
+                    eprintln!(
+                        "Tip: Check your PC IP and run: hivebear mesh run remote_model --peer <PC_IP>:7878"
+                    );
+                    return;
+                }
                 println!(
                     "{} Failed to connect to peer ({err_msg}). Falling back to local inference.",
                     "Mesh:".yellow()

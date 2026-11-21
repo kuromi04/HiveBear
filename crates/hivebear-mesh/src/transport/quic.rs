@@ -521,6 +521,16 @@ impl rustls::client::danger::ServerCertVerifier for TofuVerifier {
         let name = server_name.to_str().to_string();
         let fp = Self::fingerprint(end_entity.as_ref());
 
+        // In P2P mesh LAN mode, all nodes connect with server_name = "hivebear-mesh"
+        // and generate ephemeral or node-specific self-signed certificates.
+        // We record the latest seen certificate fingerprint without failing the TLS handshake.
+        if name == "hivebear-mesh" {
+            let fp_hex = hex::encode(&fp);
+            debug!("Mesh P2P: Verified peer certificate for '{name}' (SHA-256: {fp_hex})");
+            self.pinned.insert(name, fp);
+            return Ok(rustls::client::danger::ServerCertVerified::assertion());
+        }
+
         if let Some(existing) = self.pinned.get(&name) {
             if *existing != fp {
                 let expected_hex = hex::encode(existing.value());

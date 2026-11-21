@@ -39,10 +39,22 @@ export default function Layout() {
   }, [handleKeyDown]);
 
   if (isMobile) {
+    const isChat = location.pathname === "/chat";
     return (
       <div className="flex h-dvh w-full flex-col overflow-hidden bg-surface-primary">
-        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-6">
-          <div key={location.pathname} className="animate-[page-enter] min-h-full">
+        <main
+          className={`flex-1 min-h-0 ${
+            isChat
+              ? "flex flex-col overflow-hidden"
+              : "overflow-y-auto overflow-x-hidden overscroll-contain pb-6"
+          }`}
+        >
+          <div
+            key={location.pathname}
+            className={`animate-[page-enter] ${
+              isChat ? "flex h-full min-h-0 flex-1 flex-col" : "min-h-full"
+            }`}
+          >
             <Outlet />
           </div>
         </main>
