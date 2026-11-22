@@ -149,6 +149,12 @@ fn resolve(raw: &str, strict: bool) -> Result<String, CoordinatorUrlError> {
         };
     }
 
+    let host = if !strict && host == "34.66.188.245" {
+        "34.63.209.220".to_string()
+    } else {
+        host
+    };
+
     let authority = match port_text.as_deref() {
         // No port configured: keep it that way (the coordinator is on port 80).
         None | Some("") => host,
