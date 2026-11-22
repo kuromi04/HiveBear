@@ -58,12 +58,14 @@ impl QuicTransport {
         id.0.to_bytes().to_vec()
     }
 
-    /// Generate self-signed TLS certificate with the configured security mode.
+    /// Generate self-signed TLS certificate bound to this node's Ed25519 `NodeId`.
     fn generate_self_signed_config(
+        local_id: &NodeId,
         security_mode: MeshSecurityMode,
         tofu_pins_path: Option<PathBuf>,
     ) -> Result<(ServerConfig, ClientConfig)> {
-        let cert = rcgen::generate_simple_self_signed(vec!["hivebear-mesh".into()])
+        let id_san = format!("hivebear-id-{}", local_id.to_hex());
+        let cert = rcgen::generate_simple_self_signed(vec!["hivebear-mesh".into(), id_san])
             .map_err(|e| MeshError::Transport(format!("cert generation: {e}")))?;
 
         let cert_der = rustls::pki_types::CertificateDer::from(cert.cert);
@@ -180,8 +182,11 @@ impl MeshTransport for QuicTransport {
         if ep_guard.is_none() {
             // Automatically bind an ephemeral endpoint on 0.0.0.0:0 for client-only connections
             let fallback_addr = SocketAddr::from(([0, 0, 0, 0], 0));
-            let (server_config, client_config) =
-                Self::generate_self_signed_config(self.security_mode, self.tofu_pins_path.clone())?;
+            let (server_config, client_config) = Self::generate_self_signed_config(
+                &self.local_id,
+                self.security_mode,
+                self.tofu_pins_path.clone(),
+            )?;
             let mut ep = Endpoint::server(server_config, fallback_addr)
                 .map_err(|e| MeshError::Transport(format!("bind client endpoint failed: {e}")))?;
             ep.set_default_client_config(client_config);
@@ -237,6 +242,28 @@ impl MeshTransport for QuicTransport {
             _ => return Err(MeshError::Protocol("Expected Hello/HelloAck".into())),
         };
 
+        // Verify TLS certificate identity binding when peer embeds `hivebear-id-<node_id>` SAN
+        if let Some(any_certs) = conn.peer_identity() {
+            if let Some(certs) =
+                any_certs.downcast_ref::<Vec<rustls::pki_types::CertificateDer<'static>>>()
+            {
+                if let Some(leaf) = certs.first() {
+                    let expected_san = format!("hivebear-id-{}", peer_id.to_hex());
+                    if leaf.as_ref().windows(12).any(|w| w == b"hivebear-id-")
+                        && !leaf
+                            .as_ref()
+                            .windows(expected_san.len())
+                            .any(|w| w == expected_san.as_bytes())
+                    {
+                        conn.close(1u32.into(), b"cert-nodeid-mismatch");
+                        return Err(MeshError::Transport(
+                            "TLS certificate NodeId binding mismatch (possible MITM)".into(),
+                        ));
+                    }
+                }
+            }
+        }
+
         let key = Self::node_key(&peer_id);
         self.connections.insert(key, conn.clone());
         self.spawn_reader(conn, peer_id.clone(), self.inbox_tx.clone());
@@ -254,8 +281,11 @@ impl MeshTransport for QuicTransport {
     }
 
     async fn listen(&self, addr: SocketAddr) -> Result<()> {
-        let (server_config, client_config) =
-            Self::generate_self_signed_config(self.security_mode, self.tofu_pins_path.clone())?;
+        let (server_config, client_config) = Self::generate_self_signed_config(
+            &self.local_id,
+            self.security_mode,
+            self.tofu_pins_path.clone(),
+        )?;
 
         let mut endpoint = match Endpoint::server(server_config.clone(), addr) {
             Ok(ep) => ep,

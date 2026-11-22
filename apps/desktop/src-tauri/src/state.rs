@@ -340,10 +340,11 @@ impl AppState {
                 None,
             ));
 
-        // Primary source: the coordination server.
+        // Primary source: the coordination server (authenticated with Ed25519 signatures).
         let worker_coordinator_url = coordination_server.clone();
         let primary = Arc::new(
-            hivebear_mesh::discovery::server::CoordinationServerClient::new(coordination_server),
+            hivebear_mesh::discovery::server::CoordinationServerClient::new(coordination_server)
+                .with_identity(Arc::new(identity.clone())),
         );
         let mut discovery = hivebear_mesh::discovery::composite::CompositeDiscovery::new(primary);
 

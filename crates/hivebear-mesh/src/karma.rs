@@ -161,6 +161,62 @@ impl WorkReceipt {
     }
 }
 
+/// Validate that a hex node ID is a well-formed 32-byte Ed25519 public key.
+pub fn validate_ed25519_node_id(node_id_hex: &str) -> std::result::Result<VerifyingKey, String> {
+    let pubkey_bytes =
+        hex::decode(node_id_hex).map_err(|_| "Invalid node_id hex encoding".to_string())?;
+    let pubkey_arr: [u8; 32] = pubkey_bytes
+        .try_into()
+        .map_err(|_| "node_id must be a 32-byte Ed25519 public key".to_string())?;
+    VerifyingKey::from_bytes(&pubkey_arr)
+        .map_err(|_| "Invalid Ed25519 public key in node_id".to_string())
+}
+
+/// Sign a coordinator control action (`register`, `heartbeat`, `deregister`, `signals`)
+/// with the node's Ed25519 private key. Returns `(timestamp_secs, signature_hex)`.
+pub fn sign_coordinator_action(identity: &NodeIdentity, action: &str) -> (u64, String) {
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let msg = format!(
+        "hivebear-coord-v1:{}:{}:{}",
+        identity.node_id.to_hex(),
+        action,
+        ts
+    );
+    let sig = identity.signing_key.sign(msg.as_bytes());
+    (ts, hex::encode(sig.to_bytes()))
+}
+
+/// Verify an Ed25519 signature on a coordinator control action (`register`, `heartbeat`,
+/// `deregister`, `signals`) within [`RECEIPT_MAX_AGE_SECS`].
+pub fn verify_coordinator_action(
+    node_id_hex: &str,
+    action: &str,
+    timestamp: u64,
+    sig_hex: &str,
+) -> std::result::Result<(), String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    if now.abs_diff(timestamp) > RECEIPT_MAX_AGE_SECS {
+        return Err("Coordinator signature timestamp expired".to_string());
+    }
+    let verifying_key = validate_ed25519_node_id(node_id_hex)?;
+    let sig_bytes =
+        hex::decode(sig_hex).map_err(|_| "Invalid signature hex encoding".to_string())?;
+    let sig_arr: [u8; 64] = sig_bytes
+        .try_into()
+        .map_err(|_| "Signature must be 64 bytes".to_string())?;
+    let signature = Signature::from_bytes(&sig_arr);
+    let msg = format!("hivebear-coord-v1:{}:{}:{}", node_id_hex, action, timestamp);
+    verifying_key
+        .verify(msg.as_bytes(), &signature)
+        .map_err(|_| "Invalid Ed25519 signature for coordinator action".to_string())
+}
+
 /// Calculate Karma earned by a worker for serving `tokens_processed` tokens.
 pub fn karma_earned_for_tokens(tokens_processed: u64) -> i64 {
     if tokens_processed == 0 {

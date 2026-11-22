@@ -98,6 +98,10 @@ jobs:
       - name: Build Android APK
         env:
           NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASS || 'hivebear123' }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'hivebear' }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASS || 'hivebear123' }}
         run: |
           set -o pipefail
           export NDK_HOME="${NDK_HOME:-${ANDROID_NDK_HOME:-$ANDROID_NDK_ROOT}}"
@@ -123,20 +127,25 @@ jobs:
           ln -sf "$TC/i686-linux-android24-clang" "$TC/i686-linux-android-clang" || true
           ln -sf "$TC/x86_64-linux-android24-clang" "$TC/x86_64-linux-android-clang" || true
 
-          # Ensure a universally valid release keystore exists (backdated to 2020 so all device clocks accept it)
+          # Load persistent signing keystore from GitHub Secrets if available, else generate fallback
           mkdir -p packaging/android
           mkdir -p apps/desktop/src-tauri/gen/android/app
           rm -f packaging/android/release.keystore apps/desktop/src-tauri/gen/android/app/release.keystore
-          keytool -genkeypair -v \
-            -keystore packaging/android/release.keystore \
-            -alias hivebear \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -startdate "2020/01/01 00:00:00" \
-            -storepass hivebear123 \
-            -keypass hivebear123 \
-            -dname "CN=HiveBear, OU=HiveBear, O=HiveBear, L=San Francisco, ST=California, C=US"
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Using persistent ANDROID_KEYSTORE_BASE64 secret..."
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > packaging/android/release.keystore
+          else
+            keytool -genkeypair -v \
+              -keystore packaging/android/release.keystore \
+              -alias "$KEY_ALIAS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -startdate "2020/01/01 00:00:00" \
+              -storepass "$KEYSTORE_PASSWORD" \
+              -keypass "$KEY_PASSWORD" \
+              -dname "CN=HiveBear, OU=HiveBear, O=HiveBear, L=San Francisco, ST=California, C=US"
+          fi
           cp packaging/android/release.keystore apps/desktop/src-tauri/gen/android/app/release.keystore
 
           # Derive monotonically increasing versionCode from tag (e.g. v0.2.35 -> 20035)
@@ -195,9 +204,9 @@ jobs:
             echo "Signing $apk with $KEYSTORE (v1 + v2 enabled)..."
             $APKSIGNER sign \
               --ks "$KEYSTORE" \
-              --ks-pass pass:hivebear123 \
-              --key-pass pass:hivebear123 \
-              --ks-key-alias hivebear \
+              --ks-pass "pass:$KEYSTORE_PASSWORD" \
+              --key-pass "pass:$KEY_PASSWORD" \
+              --ks-key-alias "$KEY_ALIAS" \
               --v1-signing-enabled true \
               --v2-signing-enabled true \
               --v3-signing-enabled false \

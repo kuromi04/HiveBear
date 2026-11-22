@@ -19,6 +19,7 @@ pub struct CoordinationServerClient {
     node_info: tokio::sync::Mutex<Option<PeerInfo>>,
     /// Last failure, surfaced to the UI so a zero-peer state is explained.
     last_error: std::sync::Mutex<Option<String>>,
+    identity: Option<std::sync::Arc<crate::identity::NodeIdentity>>,
 }
 
 impl CoordinationServerClient {
@@ -42,6 +43,27 @@ impl CoordinationServerClient {
                 .unwrap_or_default(),
             node_info: tokio::sync::Mutex::new(None),
             last_error: std::sync::Mutex::new(None),
+            identity: None,
+        }
+    }
+
+    /// Attach a [`NodeIdentity`] so all control actions (`register`, `heartbeat`,
+    /// `deregister`, `signals`) are signed with Ed25519 headers.
+    pub fn with_identity(
+        mut self,
+        identity: std::sync::Arc<crate::identity::NodeIdentity>,
+    ) -> Self {
+        self.identity = Some(identity);
+        self
+    }
+
+    fn sign_request(&self, req: reqwest::RequestBuilder, action: &str) -> reqwest::RequestBuilder {
+        if let Some(ref id) = self.identity {
+            let (ts, sig) = crate::karma::sign_coordinator_action(id, action);
+            req.header("X-Node-Timestamp", ts.to_string())
+                .header("X-Node-Signature", sig)
+        } else {
+            req
         }
     }
 
@@ -73,7 +95,11 @@ impl PeerDiscovery for CoordinationServerClient {
         // Store info for heartbeats
         *self.node_info.lock().await = Some(info.clone());
 
-        match self.http.post(&url).json(info).send().await {
+        match self
+            .sign_request(self.http.post(&url).json(info), "register")
+            .send()
+            .await
+        {
             Ok(resp) if resp.status().is_success() => {
                 debug!("Registered successfully with coordination server");
                 self.set_error(None);
@@ -153,7 +179,11 @@ impl PeerDiscovery for CoordinationServerClient {
         };
 
         let url = format!("{}/heartbeat", self.base_url);
-        match self.http.post(&url).json(info).send().await {
+        match self
+            .sign_request(self.http.post(&url).json(info), "heartbeat")
+            .send()
+            .await
+        {
             Ok(resp) if resp.status().is_success() => {
                 self.set_error(None);
                 Ok(())
@@ -196,7 +226,11 @@ impl PeerDiscovery for CoordinationServerClient {
         // while other nodes could still see it.
         let node_id = peer.node_id.to_hex();
         let url = format!("{}/deregister?node_id={}", self.base_url, node_id);
-        match self.http.delete(&url).send().await {
+        match self
+            .sign_request(self.http.delete(&url), "deregister")
+            .send()
+            .await
+        {
             Ok(resp) if resp.status().is_success() => {
                 debug!("Deregistered node {node_id} from coordination server");
             }
@@ -399,7 +433,11 @@ impl CoordinationServerClient {
     pub async fn poll_signals(&self, node_id: &str) -> Result<Vec<serde_json::Value>> {
         let url = format!("{}/signals?node_id={}", self.base_url, node_id);
 
-        match self.http.get(&url).send().await {
+        match self
+            .sign_request(self.http.get(&url), "signals")
+            .send()
+            .await
+        {
             Ok(resp) if resp.status().is_success() => {
                 let signals: Vec<serde_json::Value> = resp
                     .json()

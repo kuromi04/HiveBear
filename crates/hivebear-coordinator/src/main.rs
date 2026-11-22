@@ -5,16 +5,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::extract::{DefaultBodyLimit, Query, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::Json;
 use axum::routing::{delete, get, post};
 use axum::Router;
 use clap::Parser;
 use dashmap::DashMap;
 use hivebear_mesh::karma::{
-    apply_weekly_decay, cloud_karma_cost_for_tokens, karma_earned_for_tokens, KarmaTier,
-    WorkReceipt, MAX_PAIR_KARMA_PER_HOUR, MAX_TOKENS_PER_RECEIPT, RECEIPT_MAX_AGE_SECS,
+    apply_weekly_decay, cloud_karma_cost_for_tokens, karma_earned_for_tokens,
+    validate_ed25519_node_id, verify_coordinator_action, KarmaTier, WorkReceipt,
+    MAX_PAIR_KARMA_PER_HOUR, MAX_TOKENS_PER_RECEIPT, RECEIPT_MAX_AGE_SECS,
 };
 use hivebear_mesh::PeerInfo;
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,8 @@ use tracing_subscriber::EnvFilter;
 const SECONDS_PER_HOUR: u64 = 3_600;
 const SECONDS_PER_DAY: u64 = 86_400;
 const SECONDS_PER_WEEK: u64 = 7 * SECONDS_PER_DAY;
+const MAX_ACTIVE_NODES: usize = 2_000;
+const MAX_HTTP_BODY_BYTES: usize = 64 * 1024;
 
 #[derive(Parser)]
 #[command(
@@ -58,6 +61,7 @@ struct PersistedLedger {
 struct NodeEntry {
     info: PeerInfo,
     last_seen: Instant,
+    authenticated: bool,
 }
 
 struct CoordinatorState {
@@ -244,6 +248,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/dashboard", get(dashboard))
         .route("/karma/balance", get(get_karma_balance))
         .route("/karma/claim", post(claim_karma))
+        .layer(DefaultBodyLimit::max(MAX_HTTP_BODY_BYTES))
         .layer(cors)
         .with_state(state);
 
@@ -260,6 +265,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Extract and verify optional Ed25519 signature headers (`X-Node-Signature`, `X-Node-Timestamp`).
+/// Returns `Ok(true)` if signed and valid, `Ok(false)` if no signature header was sent,
+/// or `Err(StatusCode::FORBIDDEN)` if a signature was present and invalid/expired.
+fn check_node_signature(
+    headers: &HeaderMap,
+    node_id: &str,
+    action: &str,
+) -> Result<bool, StatusCode> {
+    let Some(sig_val) = headers.get("x-node-signature") else {
+        return Ok(false);
+    };
+    let sig_hex = sig_val.to_str().map_err(|_| StatusCode::FORBIDDEN)?;
+    let ts: u64 = headers
+        .get("x-node-timestamp")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse().ok())
+        .ok_or(StatusCode::FORBIDDEN)?;
+
+    verify_coordinator_action(node_id, action, ts, sig_hex).map_err(|_| StatusCode::FORBIDDEN)?;
+    Ok(true)
+}
+
 async fn health_check() -> Json<serde_json::Value> {
     Json(json!({
         "status": "ok",
@@ -269,14 +296,39 @@ async fn health_check() -> Json<serde_json::Value> {
     }))
 }
 
-async fn register_node(State(state): State<SharedState>, Json(info): Json<PeerInfo>) -> StatusCode {
+async fn register_node(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Json(info): Json<PeerInfo>,
+) -> StatusCode {
     let node_id = info.node_id.to_hex();
-    info!("Registering node {} ({})", node_id, info.addr);
+    if validate_ed25519_node_id(&node_id).is_err() {
+        return StatusCode::BAD_REQUEST;
+    }
+    let signed = match check_node_signature(&headers, &node_id, "register") {
+        Ok(s) => s,
+        Err(code) => return code,
+    };
+
+    // Protect already-authenticated nodes from unsigned overwrite
+    if let Some(existing) = state.nodes.get(&node_id) {
+        if existing.authenticated && !signed {
+            return StatusCode::FORBIDDEN;
+        }
+    } else if state.nodes.len() >= MAX_ACTIVE_NODES {
+        return StatusCode::TOO_MANY_REQUESTS;
+    }
+
+    info!(
+        "Registering node {} ({}, signed={})",
+        node_id, info.addr, signed
+    );
     state.nodes.insert(
         node_id,
         NodeEntry {
             info,
             last_seen: Instant::now(),
+            authenticated: signed,
         },
     );
     StatusCode::OK
@@ -284,20 +336,38 @@ async fn register_node(State(state): State<SharedState>, Json(info): Json<PeerIn
 
 async fn heartbeat_node(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     Json(info): Json<PeerInfo>,
 ) -> StatusCode {
     let node_id = info.node_id.to_hex();
+    if validate_ed25519_node_id(&node_id).is_err() {
+        return StatusCode::BAD_REQUEST;
+    }
+    let signed = match check_node_signature(&headers, &node_id, "heartbeat") {
+        Ok(s) => s,
+        Err(code) => return code,
+    };
+
     if let Some(mut entry) = state.nodes.get_mut(&node_id) {
+        if entry.authenticated && !signed {
+            return StatusCode::FORBIDDEN;
+        }
         entry.info = info;
         entry.last_seen = Instant::now();
+        if signed {
+            entry.authenticated = true;
+        }
         StatusCode::OK
     } else {
-        // Auto-register if missing
+        if state.nodes.len() >= MAX_ACTIVE_NODES {
+            return StatusCode::TOO_MANY_REQUESTS;
+        }
         state.nodes.insert(
             node_id,
             NodeEntry {
                 info,
                 last_seen: Instant::now(),
+                authenticated: signed,
             },
         );
         StatusCode::OK
@@ -341,10 +411,20 @@ struct DeregisterQuery {
 
 async fn deregister_node(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     Query(query): Query<DeregisterQuery>,
 ) -> StatusCode {
     if let Some(id) = query.node_id {
-        info!("Deregistering node {}", id);
+        let signed = match check_node_signature(&headers, &id, "deregister") {
+            Ok(s) => s,
+            Err(code) => return code,
+        };
+        if let Some(existing) = state.nodes.get(&id) {
+            if existing.authenticated && !signed {
+                return StatusCode::FORBIDDEN;
+            }
+        }
+        info!("Deregistering node {} (signed={})", id, signed);
         state.nodes.remove(&id);
         state.signals.remove(&id);
     }
@@ -363,10 +443,20 @@ async fn send_signal(
     State(state): State<SharedState>,
     Json(signal): Json<SignalMessage>,
 ) -> StatusCode {
+    if validate_ed25519_node_id(&signal.from_node).is_err()
+        || validate_ed25519_node_id(&signal.to_node).is_err()
+    {
+        return StatusCode::BAD_REQUEST;
+    }
     let to_node = signal.to_node.clone();
-    let val = serde_json::to_value(signal).unwrap();
+    let Ok(val) = serde_json::to_value(signal) else {
+        return StatusCode::BAD_REQUEST;
+    };
 
-    // SECURITY FIX: Cap the number of signals to prevent Memory Leak / DoS
+    // SECURITY FIX: Cap the number of signals and total signal queues to prevent Memory Leak / DoS
+    if !state.signals.contains_key(&to_node) && state.signals.len() >= MAX_ACTIVE_NODES {
+        return StatusCode::TOO_MANY_REQUESTS;
+    }
     let mut entry = state.signals.entry(to_node).or_default();
     if entry.len() < 50 {
         entry.push(val);
@@ -383,12 +473,19 @@ struct PollSignalQuery {
 
 async fn poll_signals(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     Query(query): Query<PollSignalQuery>,
-) -> Json<Vec<serde_json::Value>> {
+) -> Result<Json<Vec<serde_json::Value>>, StatusCode> {
+    let signed = check_node_signature(&headers, &query.node_id, "signals")?;
+    if let Some(existing) = state.nodes.get(&query.node_id) {
+        if existing.authenticated && !signed {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
     if let Some((_, signals)) = state.signals.remove(&query.node_id) {
-        Json(signals)
+        Ok(Json(signals))
     } else {
-        Json(Vec::new())
+        Ok(Json(Vec::new()))
     }
 }
 

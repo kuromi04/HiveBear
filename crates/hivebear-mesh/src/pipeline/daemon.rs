@@ -206,26 +206,74 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
                         continue;
                     }
 
+                    // DoS protection: cap prompt payload size and requested max_tokens
+                    const MAX_MESSAGES_JSON_BYTES: usize = 256 * 1024;
+                    const MAX_ALLOWED_REMOTE_TOKENS: u32 = 4_096;
+                    const MAX_QUEUED_REQUESTS: usize = 32;
+
+                    if messages_json.len() > MAX_MESSAGES_JSON_BYTES {
+                        let _ = self
+                            .transport
+                            .send(
+                                &peer_id,
+                                MeshMessage::InferenceComplete {
+                                    session_id,
+                                    full_text: String::new(),
+                                    tokens_generated: 0,
+                                    error: Some(
+                                        "Prompt payload exceeds maximum allowed size (256 KiB)"
+                                            .into(),
+                                    ),
+                                },
+                            )
+                            .await;
+                        continue;
+                    }
+                    let max_tokens = max_tokens.clamp(1, MAX_ALLOWED_REMOTE_TOKENS);
+
                     let tier = self.resolve_peer_tier(&peer_id).await;
                     let seq = seq_counter.fetch_add(1, AtomicOrdering::Relaxed);
+                    let accepted = {
+                        let mut heap = queue.lock().unwrap_or_else(|e| e.into_inner());
+                        if heap.len() >= MAX_QUEUED_REQUESTS {
+                            false
+                        } else {
+                            heap.push(QueuedInference {
+                                priority: tier.priority_rank(),
+                                seq,
+                                peer_id: peer_id.clone(),
+                                session_id,
+                                model_id: model_id.clone(),
+                                messages_json,
+                                max_tokens,
+                                temperature,
+                            });
+                            true
+                        }
+                    };
+                    if !accepted {
+                        let _ = self
+                            .transport
+                            .send(
+                                &peer_id,
+                                MeshMessage::InferenceComplete {
+                                    session_id,
+                                    full_text: String::new(),
+                                    tokens_generated: 0,
+                                    error: Some(
+                                        "Worker queue is currently full (max 32 requests); please retry"
+                                            .into(),
+                                    ),
+                                },
+                            )
+                            .await;
+                        continue;
+                    }
                     info!(
                         "MeshWorkerDaemon: queued inference request from {peer_id} \
                          (tier={}, session {session_id}, model '{model_id}')",
                         tier.as_str()
                     );
-                    {
-                        let mut heap = queue.lock().unwrap_or_else(|e| e.into_inner());
-                        heap.push(QueuedInference {
-                            priority: tier.priority_rank(),
-                            seq,
-                            peer_id,
-                            session_id,
-                            model_id,
-                            messages_json,
-                            max_tokens,
-                            temperature,
-                        });
-                    }
                     notify.notify_one();
                 }
                 MeshMessage::Ping { timestamp_ms } => {
