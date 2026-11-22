@@ -26,7 +26,7 @@ export function useModelLoader() {
     setLoading(true);
     setError(null);
     try { return await loadModel(modelPath, contextLength, gpuLayers); }
-    catch (e) { setError(String(e)); return null; }
+    catch (e) { setError(errorText(e)); return null; }
     finally { setLoading(false); }
   }, []);
 

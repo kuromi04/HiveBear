@@ -57,7 +57,21 @@ function friendlyMessage(_command: string, code: string | null, message: string,
 
 function normalize(command: string, err: unknown): InvokeError {
   if (err instanceof InvokeError) return err;
-  if (typeof err === "string") return new InvokeError(command, err, null, err);
+  if (typeof err === "string") {
+    const trimmed = err.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(trimmed) as { code?: unknown; message?: unknown };
+        if (parsed && typeof parsed === "object" && typeof parsed.message === "string") {
+          const code = typeof parsed.code === "string" ? parsed.code : null;
+          return new InvokeError(command, parsed.message, code, err);
+        }
+      } catch {
+        // Not valid JSON; fall through to raw string
+      }
+    }
+    return new InvokeError(command, err, null, err);
+  }
   if (err instanceof Error) return new InvokeError(command, err.message, null, err);
   if (err && typeof err === "object") {
     const anyErr = err as { code?: unknown; message?: unknown };

@@ -5,6 +5,18 @@ All notable changes to HiveBear are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.38] - 2026-11-22
+
+### Fixed
+- **Multi-Turn Context Window Sliding Truncation (`hivebear-inference`)**:
+  - Replaced hard `Prompt length exceeds context length` failures in `LlamaCppEngine` (`llamacpp.rs`) and `CandleEngine` (`candle_backend.rs`) with automatic sliding-window conversation truncation that preserves the system prompt and newest turns while reserving generation token headroom (`128..=768` tokens).
+- **Singleton `LlamaBackend` Initialization (`llamacpp.rs`)**:
+  - Backed `LlamaBackend::init()` with a process-wide `std::sync::OnceLock<LlamaBackend>` singleton (`shared_llama_backend()`) so loading a second model or reloading an existing GGUF model never fails with `BackendAlreadyInitialized`.
+- **Structured Tauri Error Toast Parsing (`invoke.ts`, `useInference.ts`)**:
+  - Updated `normalize()` in `apps/desktop/src/lib/invoke.ts` to unwrap JSON-encoded `CommandError` payloads (`{"message":"...","code":"..."}`) into clean human-readable messages instead of displaying raw JSON strings in error toasts.
+- **Dynamic Header Version Badge (`Sidebar.tsx`)**:
+  - Replaced hardcoded `v0.2.0 • P2P Distributed` sidebar header text with `v{__APP_VERSION__} • P2P Distributed`.
+
 ## [0.2.37] - 2026-11-22
 
 ### Added
@@ -41,5 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Universal AI backend for IDE extensions (OpenAI-compatible API server)
 - Comprehensive security hardening across all crates
 
+[0.2.38]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.38
 [0.2.37]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.37
 [0.1.5]: https://github.com/kuromi04/HiveBear/releases/tag/v0.1.5

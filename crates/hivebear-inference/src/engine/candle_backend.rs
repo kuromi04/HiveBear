@@ -951,6 +951,14 @@ fn generate_blocking(loaded: &LoadedModel, req: &GenerateRequest) -> Result<Stri
             "Prompt tokenization produced 0 tokens".into(),
         ));
     }
+    const MAX_CANDLE_PROMPT_TOKENS: usize = 3072;
+    if prompt_tokens.len() > MAX_CANDLE_PROMPT_TOKENS {
+        let keep_tail = MAX_CANDLE_PROMPT_TOKENS - 1;
+        let mut clipped = Vec::with_capacity(MAX_CANDLE_PROMPT_TOKENS);
+        clipped.push(prompt_tokens[0]);
+        clipped.extend_from_slice(&prompt_tokens[prompt_tokens.len() - keep_tail..]);
+        prompt_tokens = clipped;
+    }
 
     let input = Tensor::new(prompt_tokens.as_slice(), &loaded.device)
         .map_err(|e| InferenceError::GenerationError(format!("Tensor creation failed: {e}")))?
@@ -1035,6 +1043,14 @@ fn stream_blocking(
         return Err(InferenceError::GenerationError(
             "Prompt tokenization produced 0 tokens".into(),
         ));
+    }
+    const MAX_CANDLE_PROMPT_TOKENS: usize = 3072;
+    if prompt_tokens.len() > MAX_CANDLE_PROMPT_TOKENS {
+        let keep_tail = MAX_CANDLE_PROMPT_TOKENS - 1;
+        let mut clipped = Vec::with_capacity(MAX_CANDLE_PROMPT_TOKENS);
+        clipped.push(prompt_tokens[0]);
+        clipped.extend_from_slice(&prompt_tokens[prompt_tokens.len() - keep_tail..]);
+        prompt_tokens = clipped;
     }
 
     let input = Tensor::new(prompt_tokens.as_slice(), &loaded.device)

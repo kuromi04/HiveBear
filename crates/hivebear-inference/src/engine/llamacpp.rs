@@ -18,10 +18,28 @@ use hivebear_core::types::{InferenceEngine, ModelFormat};
 
 use super::{InferenceBackend, TokenStream};
 
+struct SharedBackend(LlamaBackend);
+unsafe impl Send for SharedBackend {}
+unsafe impl Sync for SharedBackend {}
+
+fn shared_llama_backend() -> Result<&'static LlamaBackend> {
+    static BACKEND: std::sync::OnceLock<std::result::Result<SharedBackend, String>> =
+        std::sync::OnceLock::new();
+    let res = BACKEND.get_or_init(|| {
+        let b = LlamaBackend::init().map_err(|e| format!("Failed to init llama backend: {e}"))?;
+        llama_cpp_2::send_logs_to_tracing(llama_cpp_2::LogOptions::default());
+        Ok(SharedBackend(b))
+    });
+    match res {
+        Ok(sb) => Ok(&sb.0),
+        Err(msg) => Err(InferenceError::LoadError(msg.clone())),
+    }
+}
+
 /// Internal state for a loaded llama.cpp model + context.
 struct LoadedModel {
     model: LlamaModel,
-    backend: LlamaBackend,
+    backend: &'static LlamaBackend,
 }
 
 // SAFETY: LlamaModel and LlamaBackend are thread-safe in practice —
@@ -85,12 +103,7 @@ impl InferenceBackend for LlamaCppBackend {
                 return Err(InferenceError::ModelNotFound(path.display().to_string()));
             }
 
-            let backend = LlamaBackend::init().map_err(|e| {
-                InferenceError::LoadError(format!("Failed to init llama backend: {e}"))
-            })?;
-
-            // Redirect llama.cpp logs to tracing
-            llama_cpp_2::send_logs_to_tracing(llama_cpp_2::LogOptions::default());
+            let backend = shared_llama_backend()?;
 
             // Set up model params
             let mut model_params = LlamaModelParams::default();
@@ -110,7 +123,7 @@ impl InferenceBackend for LlamaCppBackend {
             });
             model_params = model_params.with_n_gpu_layers(gpu_layers);
 
-            let model = match LlamaModel::load_from_file(&backend, &path, &model_params) {
+            let model = match LlamaModel::load_from_file(backend, &path, &model_params) {
                 Ok(m) => m,
                 Err(e) if gpu_layers > 0 => {
                     tracing::warn!("Failed to load model on GPU ({e}), falling back to CPU mode (0 GPU layers)");
@@ -122,7 +135,7 @@ impl InferenceBackend for LlamaCppBackend {
                         cpu_params = cpu_params.with_use_mlock(true);
                     }
                     cpu_params = cpu_params.with_n_gpu_layers(0);
-                    LlamaModel::load_from_file(&backend, &path, &cpu_params)
+                    LlamaModel::load_from_file(backend, &path, &cpu_params)
                         .map_err(|e2| InferenceError::LoadError(format!("Failed to load model on CPU: {e2}")))?
                 }
                 Err(e) => return Err(InferenceError::LoadError(format!("Failed to load model: {e}"))),
@@ -264,15 +277,18 @@ fn build_sampler(model: &LlamaModel, req: &GenerateRequest, seed: u32) -> LlamaS
     LlamaSampler::chain_simple(samplers)
 }
 
-/// Blocking generation — runs the full decode loop and returns the complete text.
-fn generate_blocking(
-    loaded: &LoadedModel,
-    config: &LoadConfig,
+/// Tokenize the prompt with automatic sliding-window truncation so multi-turn conversations
+/// never fail with `Prompt length exceeds context length` and always leave room for generation.
+fn tokenize_with_sliding_window(
+    model: &LlamaModel,
     req: &GenerateRequest,
-) -> Result<String> {
+    n_ctx: u32,
+) -> Result<Vec<llama_cpp_2::token::LlamaToken>> {
+    let reserve = ((n_ctx as usize) / 4).clamp(128, 768);
+    let max_prompt = (n_ctx as usize).saturating_sub(reserve).max(64);
+
     let prompt = build_prompt(req);
-    let tokens = loaded
-        .model
+    let mut tokens = model
         .str_to_token(&prompt, AddBos::Always)
         .map_err(|e| InferenceError::GenerationError(format!("Tokenization failed: {e}")))?;
 
@@ -282,14 +298,43 @@ fn generate_blocking(
         ));
     }
 
-    let n_ctx = config.context_length;
-    if tokens.len() > n_ctx as usize {
-        return Err(InferenceError::GenerationError(format!(
-            "Prompt length ({} tokens) exceeds context length ({} tokens)",
-            tokens.len(),
-            n_ctx
-        )));
+    if tokens.len() > max_prompt && req.messages.len() > 1 {
+        let mut trimmed_req = req.clone();
+        let drop_idx = if matches!(trimmed_req.messages.first(), Some(ChatMessage::System(_))) {
+            1
+        } else {
+            0
+        };
+        while tokens.len() > max_prompt && trimmed_req.messages.len() > drop_idx + 1 {
+            trimmed_req.messages.remove(drop_idx);
+            let p = build_prompt(&trimmed_req);
+            if let Ok(t) = model.str_to_token(&p, AddBos::Always) {
+                if !t.is_empty() {
+                    tokens = t;
+                }
+            }
+        }
     }
+
+    if tokens.len() > max_prompt {
+        let keep_tail = max_prompt.saturating_sub(1);
+        let mut clipped = Vec::with_capacity(max_prompt);
+        clipped.push(tokens[0]);
+        clipped.extend_from_slice(&tokens[tokens.len() - keep_tail..]);
+        tokens = clipped;
+    }
+
+    Ok(tokens)
+}
+
+/// Blocking generation — runs the full decode loop and returns the complete text.
+fn generate_blocking(
+    loaded: &LoadedModel,
+    config: &LoadConfig,
+    req: &GenerateRequest,
+) -> Result<String> {
+    let n_ctx = config.context_length;
+    let tokens = tokenize_with_sliding_window(&loaded.model, req, n_ctx)?;
 
     let n_threads = config.threads.unwrap_or(num_cpus() as u32);
 
@@ -301,7 +346,7 @@ fn generate_blocking(
 
     let mut ctx = loaded
         .model
-        .new_context(&loaded.backend, ctx_params)
+        .new_context(loaded.backend, ctx_params)
         .map_err(|e| InferenceError::GenerationError(format!("Context creation failed: {e}")))?;
 
     let seed = config.seed.unwrap_or(42) as u32;
@@ -373,26 +418,8 @@ fn stream_blocking(
     req: &GenerateRequest,
     tx: &tokio::sync::mpsc::Sender<Result<Token>>,
 ) -> Result<()> {
-    let prompt = build_prompt(req);
-    let tokens = loaded
-        .model
-        .str_to_token(&prompt, AddBos::Always)
-        .map_err(|e| InferenceError::GenerationError(format!("Tokenization failed: {e}")))?;
-
-    if tokens.is_empty() {
-        return Err(InferenceError::GenerationError(
-            "Prompt tokenization produced empty tokens".into(),
-        ));
-    }
-
     let n_ctx = config.context_length;
-    if tokens.len() > n_ctx as usize {
-        return Err(InferenceError::GenerationError(format!(
-            "Prompt length ({} tokens) exceeds context length ({} tokens)",
-            tokens.len(),
-            n_ctx
-        )));
-    }
+    let tokens = tokenize_with_sliding_window(&loaded.model, req, n_ctx)?;
 
     let n_threads = config.threads.unwrap_or(num_cpus() as u32);
 
@@ -404,7 +431,7 @@ fn stream_blocking(
 
     let mut ctx = loaded
         .model
-        .new_context(&loaded.backend, ctx_params)
+        .new_context(loaded.backend, ctx_params)
         .map_err(|e| InferenceError::GenerationError(format!("Context creation failed: {e}")))?;
 
     let seed = config.seed.unwrap_or(42) as u32;

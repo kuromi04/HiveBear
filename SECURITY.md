@@ -16,7 +16,7 @@ If you discover a security vulnerability in HiveBear, please report it responsib
 
 ---
 
-## Implemented Security Controls (`v0.2.37+`)
+## Implemented Security Controls (`v0.2.38+`)
 
 1. **QUIC TLS 1.3 Transport & NodeId Certificate Binding (`hivebear-mesh`)**
    - All peer-to-peer inference and tensor streams are encrypted with QUIC TLS 1.3 (`rustls` + `quinn`).

@@ -64,7 +64,7 @@ export default function Sidebar() {
               </span>
             </div>
             <span className="text-[9px] text-text-muted">
-              v0.2.0 • P2P Distributed
+              v{__APP_VERSION__} • P2P Distributed
             </span>
           </div>
         )}
