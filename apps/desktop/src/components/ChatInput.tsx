@@ -13,8 +13,12 @@ interface ChatInputProps {
   modelName: string | null;
   /** All loaded models for the selector */
   loadedModels: Array<{ handle_id: number; label: string; engine: string }>;
+  /** Downloaded local models not yet loaded into memory */
+  unloadedModels?: Array<{ id: string; name: string }>;
   activeHandleId: number | null;
   onModelChange: (handleId: number) => void;
+  onLoadInstalledModel?: (modelId: string) => void;
+  loadingModel?: boolean;
   chatParams: ChatParams;
   onChatParamsChange: (params: ChatParams) => void;
 }
@@ -28,8 +32,11 @@ export default function ChatInput({
   disabled,
   modelName,
   loadedModels,
+  unloadedModels = [],
   activeHandleId,
   onModelChange,
+  onLoadInstalledModel,
+  loadingModel = false,
   chatParams,
   onChatParamsChange,
 }: ChatInputProps) {
@@ -61,7 +68,7 @@ export default function ChatInput({
     [onSend, streaming, value, disabled],
   );
 
-  const showModelSelector = loadedModels.length > 1;
+  const showModelSelector = loadedModels.length + unloadedModels.length > 1;
 
   return (
     <div className="shrink-0 border-t border-border px-3 py-2.5 sm:px-6 sm:py-4">
@@ -73,20 +80,33 @@ export default function ChatInput({
               <div className="relative min-w-0" ref={modelMenuRef}>
                 {showModelSelector ? (
                   <select
-                    value={activeHandleId ?? ""}
-                    onChange={(e) => onModelChange(Number(e.target.value))}
-                    className="interactive-hover max-w-[220px] truncate appearance-none rounded-[var(--radius-sm)] border border-border bg-surface-raised px-2 py-1 pr-6 text-[11px] font-medium text-text-secondary outline-none hover:border-paw-500/30 hover:text-text-primary focus:border-paw-500 sm:max-w-none"
+                    disabled={loadingModel}
+                    value={activeHandleId != null ? String(activeHandleId) : ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val.startsWith("load:") && onLoadInstalledModel) {
+                        onLoadInstalledModel(val.slice(5));
+                      } else {
+                        onModelChange(Number(val));
+                      }
+                    }}
+                    className="interactive-hover max-w-[230px] truncate appearance-none rounded-[var(--radius-sm)] border border-border bg-surface-raised px-2 py-1 pr-6 text-[11px] font-medium text-text-secondary outline-none hover:border-paw-500/30 hover:text-text-primary focus:border-paw-500 disabled:opacity-50 sm:max-w-none"
                   >
                     {loadedModels.map((m) => (
-                      <option key={m.handle_id} value={m.handle_id}>
+                      <option key={m.handle_id} value={String(m.handle_id)}>
                         {m.label} ({m.engine})
+                      </option>
+                    ))}
+                    {unloadedModels.map((im) => (
+                      <option key={`load:${im.id}`} value={`load:${im.id}`}>
+                        📱 {im.name} (Cargar local)
                       </option>
                     ))}
                   </select>
                 ) : (
                   <span className="flex max-w-[220px] items-center gap-1 truncate rounded-[var(--radius-sm)] bg-surface-raised px-2 py-1 text-[11px] font-medium text-text-secondary sm:max-w-none">
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
-                    <span className="truncate">{modelName}</span>
+                    <span className="truncate">{loadingModel ? "Cargando modelo..." : modelName}</span>
                   </span>
                 )}
               </div>

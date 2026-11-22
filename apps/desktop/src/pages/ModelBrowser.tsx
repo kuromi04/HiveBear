@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useInstalledModels, useModelInstall, useModelRemove, useModelSearch } from "../hooks/useRegistry";
+import { useModelLoader } from "../hooks/useInference";
 import ModelCard from "../components/ModelCard";
 import DownloadProgress from "../components/DownloadProgress";
 import { Surface, EmptyState } from "../components/ui";
 import { Search as SearchIcon, Package } from "lucide-react";
 
 export default function ModelBrowser() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const { results, loading: searching, error: searchError, search } = useModelSearch();
   const { models: installed, refresh } = useInstalledModels();
   const { installing, progress, error: installError, install, cancel, clearError } = useModelInstall();
   const { removing, remove } = useModelRemove();
+  const { load, error: loadError } = useModelLoader();
+  const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
   const [tab, setTab] = useState<"search" | "installed">("search");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -39,13 +44,29 @@ export default function ModelBrowser() {
 
   const handleInstall = useCallback(async (modelId: string) => {
     const result = await install(modelId);
-    if (result) refresh();
+    if (result) {
+      await refresh();
+      setTab("installed");
+    }
   }, [install, refresh]);
 
   const handleRemove = useCallback(async (modelId: string) => {
     const ok = await remove(modelId);
     if (ok) refresh();
   }, [remove, refresh]);
+
+  const handleUseModel = useCallback(async (modelId: string) => {
+    setLoadingModelId(modelId);
+    try {
+      const res = await load(modelId);
+      if (res) {
+        try { localStorage.setItem("preferred_handle_id", String(res.handle_id)); } catch { /* ignore */ }
+        navigate("/chat");
+      }
+    } finally {
+      setLoadingModelId(null);
+    }
+  }, [load, navigate]);
 
   return (
     <Surface>
@@ -95,9 +116,9 @@ export default function ModelBrowser() {
           </div>
         )}
 
-        {searchError && (
+        {(searchError || loadError) && (
           <div className="mx-4 mt-3 rounded-[var(--radius-md)] border border-danger/30 bg-danger/10 px-4 py-2 text-sm text-danger sm:mx-6 sm:mt-4">
-            {searchError}
+            {searchError || loadError}
           </div>
         )}
 
@@ -130,7 +151,7 @@ export default function ModelBrowser() {
               <div className="grid gap-3">
                 {results.map((r) => (
                   <ModelCard key={r.metadata.id} result={r} installing={installing}
-                    removing={removing} onInstall={handleInstall} onRemove={handleRemove} />
+                    removing={removing} loadingId={loadingModelId} onInstall={handleInstall} onRemove={handleRemove} onUse={handleUseModel} />
                 ))}
               </div>
             )
@@ -145,7 +166,7 @@ export default function ModelBrowser() {
             <div className="grid gap-3">
               {installed.map((m) => (
                 <ModelCard key={m.id} result={{ metadata: m, is_installed: true, compatibility_score: null }}
-                  installing={installing} removing={removing} onInstall={handleInstall} onRemove={handleRemove} />
+                  installing={installing} removing={removing} loadingId={loadingModelId} onInstall={handleInstall} onRemove={handleRemove} onUse={handleUseModel} />
               ))}
             </div>
           )}

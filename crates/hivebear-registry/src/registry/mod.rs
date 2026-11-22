@@ -183,32 +183,72 @@ fn chosen_size(found: &[GgufFile], chosen: usize) -> u64 {
 /// keeps an interrupted download from showing up as an installed model.
 async fn discover_models(models_dir: &Path) -> Vec<DiscoveredModel> {
     let mut discovered = Vec::new();
-    let Ok(mut entries) = tokio::fs::read_dir(models_dir).await else {
-        return discovered;
-    };
+    #[allow(unused_mut)]
+    let mut search_roots = vec![models_dir.to_path_buf()];
+    #[cfg(target_os = "android")]
+    {
+        for extra in ["/storage/emulated/0/Download", "/sdcard/Download"] {
+            let p = PathBuf::from(extra);
+            if p != models_dir && !search_roots.contains(&p) {
+                search_roots.push(p);
+            }
+        }
+    }
 
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let Ok(file_type) = entry.file_type().await else {
+    for root in search_roots {
+        let Ok(mut entries) = tokio::fs::read_dir(&root).await else {
             continue;
         };
-        if !file_type.is_dir() {
-            continue;
-        }
-        let id = entry.file_name().to_string_lossy().to_string();
-        if id.starts_with('.') {
-            continue;
-        }
 
-        let scan = scan_model_dir(&entry.path()).await;
-        let Some(chosen) = pick_gguf(&scan.ggufs) else {
-            continue;
-        };
-        discovered.push(DiscoveredModel {
-            id,
-            dir: entry.path(),
-            filename: scan.ggufs[chosen].relative.clone(),
-            size_bytes: chosen_size(&scan.ggufs, chosen),
-        });
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let Ok(file_type) = entry.file_type().await else {
+                continue;
+            };
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+
+            if file_type.is_file() {
+                let lower = name.to_ascii_lowercase();
+                if lower.ends_with(".gguf") && !lower.contains(".partial") {
+                    let size_bytes = entry.metadata().await.map(|m| m.len()).unwrap_or(0);
+                    if size_bytes > 0 {
+                        let id = Path::new(&name)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or(&name)
+                            .to_string();
+                        if !discovered.iter().any(|d: &DiscoveredModel| d.id == id) {
+                            discovered.push(DiscoveredModel {
+                                id,
+                                dir: root.clone(),
+                                filename: name,
+                                size_bytes,
+                            });
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if !file_type.is_dir() || root != models_dir {
+                continue;
+            }
+
+            let scan = scan_model_dir(&entry.path()).await;
+            let Some(chosen) = pick_gguf(&scan.ggufs) else {
+                continue;
+            };
+            if !discovered.iter().any(|d: &DiscoveredModel| d.id == name) {
+                discovered.push(DiscoveredModel {
+                    id: name,
+                    dir: entry.path(),
+                    filename: scan.ggufs[chosen].relative.clone(),
+                    size_bytes: chosen_size(&scan.ggufs, chosen),
+                });
+            }
+        }
     }
 
     discovered.sort_by(|a, b| a.id.cmp(&b.id));

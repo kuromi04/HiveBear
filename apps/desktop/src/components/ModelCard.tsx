@@ -1,21 +1,32 @@
 import type { SearchResult } from "../types";
 import { formatBytes } from "../types";
-import { Download, Trash2, Check, Loader } from "lucide-react";
+import { Download, Trash2, Check, Loader, MessageSquare } from "lucide-react";
 import { Badge } from "./ui";
 
 interface ModelCardProps {
   result: SearchResult;
   installing: string | null;
   removing: string | null;
+  loadingId?: string | null;
   onInstall: (modelId: string) => void;
   onRemove: (modelId: string) => void;
+  onUse?: (modelId: string) => void;
 }
 
-export default function ModelCard({ result, installing, removing, onInstall, onRemove }: ModelCardProps) {
+export default function ModelCard({
+  result,
+  installing,
+  removing,
+  loadingId,
+  onInstall,
+  onRemove,
+  onUse,
+}: ModelCardProps) {
   const { metadata: m, is_installed, compatibility_score } = result;
   const isThisInstalling = installing === m.id;
   const isThisRemoving = removing === m.id;
-  const busy = isThisInstalling || isThisRemoving;
+  const isThisLoading = loadingId === m.id;
+  const busy = isThisInstalling || isThisRemoving || isThisLoading;
 
   return (
     <div className={[
@@ -40,13 +51,25 @@ export default function ModelCard({ result, installing, removing, onInstall, onR
             <p className="mt-1.5 line-clamp-2 text-xs text-text-secondary">{m.description}</p>
           )}
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5">
           {is_installed ? (
-            <button disabled={busy} onClick={() => onRemove(m.id)}
-              className="interactive-hover press-scale flex items-center gap-1.5 rounded-[var(--radius-md)] border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-danger hover:text-danger disabled:opacity-50">
-              {isThisRemoving ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
-              Remove
-            </button>
+            <>
+              {onUse && (
+                <button
+                  disabled={busy}
+                  onClick={() => onUse(m.id)}
+                  className="interactive-hover press-scale flex items-center gap-1.5 rounded-[var(--radius-md)] bg-paw-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-paw-600 disabled:opacity-50"
+                >
+                  {isThisLoading ? <Loader size={12} className="animate-spin" /> : <MessageSquare size={12} />}
+                  Chatear
+                </button>
+              )}
+              <button disabled={busy} onClick={() => onRemove(m.id)}
+                className="interactive-hover press-scale flex items-center gap-1.5 rounded-[var(--radius-md)] border border-border px-2.5 py-1.5 text-xs text-text-secondary hover:border-danger hover:text-danger disabled:opacity-50"
+                title="Eliminar modelo">
+                {isThisRemoving ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+              </button>
+            </>
           ) : (
             <button disabled={busy} onClick={() => onInstall(m.id)}
               className="interactive-hover press-scale flex items-center gap-1.5 rounded-[var(--radius-md)] bg-paw-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-paw-600 disabled:opacity-50">

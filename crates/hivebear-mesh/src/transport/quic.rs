@@ -70,8 +70,16 @@ impl QuicTransport {
         let key_der = rustls::pki_types::PrivateKeyDer::try_from(cert.key_pair.serialize_der())
             .map_err(|e| MeshError::Transport(format!("key conversion: {e}")))?;
 
-        let server_config = ServerConfig::with_single_cert(vec![cert_der.clone()], key_der)
+        let mut transport_cfg = quinn::TransportConfig::default();
+        transport_cfg.keep_alive_interval(Some(std::time::Duration::from_secs(5)));
+        if let Ok(idle) = std::time::Duration::from_secs(300).try_into() {
+            transport_cfg.max_idle_timeout(Some(idle));
+        }
+        let transport_cfg = Arc::new(transport_cfg);
+
+        let mut server_config = ServerConfig::with_single_cert(vec![cert_der.clone()], key_der)
             .map_err(|e| MeshError::Transport(format!("server config: {e}")))?;
+        server_config.transport_config(transport_cfg.clone());
 
         let verifier: Arc<dyn rustls::client::danger::ServerCertVerifier> = match security_mode {
             #[cfg(feature = "insecure-dev")]
@@ -93,7 +101,8 @@ impl QuicTransport {
         let quic_client_config =
             quinn::crypto::rustls::QuicClientConfig::try_from(Arc::new(client_crypto))
                 .map_err(|e| MeshError::Transport(format!("QUIC client config: {e}")))?;
-        let client_config = ClientConfig::new(Arc::new(quic_client_config));
+        let mut client_config = ClientConfig::new(Arc::new(quic_client_config));
+        client_config.transport_config(transport_cfg);
 
         Ok((server_config, client_config))
     }

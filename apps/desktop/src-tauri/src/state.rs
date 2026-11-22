@@ -24,6 +24,7 @@ use tracing::info;
 pub struct DesktopMeshInferenceHandler {
     pub orchestrator: Arc<Orchestrator>,
     pub registry: Arc<Registry>,
+    pub load_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl DesktopMeshInferenceHandler {
@@ -31,6 +32,7 @@ impl DesktopMeshInferenceHandler {
         &self,
         requested_model: &str,
     ) -> Result<(hivebear_inference::ModelHandle, String), String> {
+        let _guard = self.load_lock.lock().await;
         let req_lower = requested_model.trim().to_lowercase();
         let is_generic = req_lower.is_empty()
             || req_lower == "__probe__"
@@ -132,6 +134,22 @@ impl hivebear_mesh::MeshInferenceHandler for DesktopMeshInferenceHandler {
             } else {
                 let installed = self.registry.list_installed().await;
                 if let Some(first) = installed.first() {
+                    // Pre-warm the model into RAM in the background so the first chat prompt is fast
+                    let bg_orch = self.orchestrator.clone();
+                    let bg_reg = self.registry.clone();
+                    let bg_lock = self.load_lock.clone();
+                    let bg_id = first.id.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _g = bg_lock.lock().await;
+                        if bg_orch.loaded_models().is_empty() {
+                            if let Ok(resolved) = bg_reg.resolve(&bg_id).await {
+                                let _ = bg_reg.ensure_tokenizer(&bg_id, &resolved).await;
+                                let _ = bg_orch
+                                    .load(&resolved, &hivebear_inference::LoadConfig::default())
+                                    .await;
+                            }
+                        }
+                    });
                     first.name.clone()
                 } else {
                     return Err(
@@ -385,6 +403,7 @@ impl AppState {
         let handler = Arc::new(DesktopMeshInferenceHandler {
             orchestrator: self.orchestrator.clone(),
             registry: self.registry.clone(),
+            load_lock: Arc::new(tokio::sync::Mutex::new(())),
         });
         let worker_transport = node.transport.clone();
         tauri::async_runtime::spawn(async move {

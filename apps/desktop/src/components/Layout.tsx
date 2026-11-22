@@ -41,7 +41,10 @@ export default function Layout() {
   if (isMobile) {
     const isChat = location.pathname === "/chat";
     return (
-      <div className="flex h-dvh w-full flex-col overflow-hidden bg-surface-primary">
+      <div
+        className="flex h-dvh w-full flex-col overflow-hidden bg-surface-primary"
+        style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 28px)" }}
+      >
         <main
           className={`flex-1 min-h-0 ${
             isChat

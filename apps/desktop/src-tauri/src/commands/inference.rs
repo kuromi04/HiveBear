@@ -68,14 +68,17 @@ pub async fn stream_chat(
     use futures::StreamExt;
     use tauri::Emitter;
 
+    let models = state.orchestrator.loaded_models();
+    let is_local_loaded = models.iter().any(|m| m.handle_id == handle_id);
+
     let mesh_session = {
         let sessions = state
             .mesh_peer_connections
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         sessions.get(&handle_id).cloned().or_else(|| {
-            // Robust fallback: if only 1 mesh peer is active or handle_id looks like a mesh handle, use it
-            if sessions.len() == 1 || handle_id >= 100_000 || handle_id >= (1u64 << 50) {
+            // Only fallback to mesh session when handle_id is NOT an active local model
+            if !is_local_loaded && (sessions.len() == 1 || handle_id >= 100_000) {
                 sessions.values().next().cloned()
             } else {
                 None
@@ -88,7 +91,6 @@ pub async fn stream_chat(
             .await;
     }
 
-    let models = state.orchestrator.loaded_models();
     let info = models
         .iter()
         .find(|m| m.handle_id == handle_id)
@@ -267,7 +269,9 @@ async fn stream_mesh_peer_chat(
     let mut stream_error: Option<String> = None;
 
     loop {
-        let recv_fut = tokio::time::timeout(std::time::Duration::from_secs(60), transport.recv());
+        let wait_secs = if tokens_received == 0 { 300 } else { 120 };
+        let recv_fut =
+            tokio::time::timeout(std::time::Duration::from_secs(wait_secs), transport.recv());
         match recv_fut.await {
             Ok(Ok((
                 _from,

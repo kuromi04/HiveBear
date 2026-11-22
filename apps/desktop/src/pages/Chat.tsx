@@ -95,7 +95,18 @@ export default function Chat() {
 
   useEffect(() => {
     if (loaded.length > 0 && activeHandleId === null) {
-      setActiveHandleId(loaded[0].handle_id);
+      let preferred: number | null = null;
+      try {
+        const saved = localStorage.getItem("preferred_handle_id");
+        if (saved) {
+          const parsed = Number(saved);
+          if (loaded.some((m) => m.handle_id === parsed)) {
+            preferred = parsed;
+          }
+          localStorage.removeItem("preferred_handle_id");
+        }
+      } catch { /* ignore */ }
+      setActiveHandleId(preferred ?? loaded[0].handle_id);
     }
   }, [loaded, activeHandleId]);
 
@@ -224,13 +235,17 @@ export default function Chat() {
 
   // Derive model name for display
   const activeModel = loaded.find((m) => m.handle_id === activeHandleId);
-  const modelName = activeModel ? activeModel.model_path.split("/").pop() || "Model" : null;
+  const modelName = activeModel ? activeModel.model_path.split(/[/\\]/).pop() || "Model" : null;
 
   const loadedModelOptions = loaded.map((m) => ({
     handle_id: m.handle_id,
-    label: m.model_path.split("/").pop() || "Model",
+    label: m.model_path.split(/[/\\]/).pop() || "Model",
     engine: m.engine,
   }));
+
+  const unloadedModels = installed
+    .filter((im) => !loaded.some((lm) => lm.engine !== "Mesh" && lm.model_path.toLowerCase().includes(im.id.toLowerCase())))
+    .map((im) => ({ id: im.id, name: im.name }));
 
   return (
     <div className="flex h-full w-full overflow-hidden">
@@ -466,8 +481,11 @@ export default function Chat() {
           disabled={activeHandleId === null}
           modelName={modelName}
           loadedModels={loadedModelOptions}
+          unloadedModels={unloadedModels}
           activeHandleId={activeHandleId}
           onModelChange={setActiveHandleId}
+          onLoadInstalledModel={handleLoadModel}
+          loadingModel={modelLoading}
           chatParams={chatParams}
           onChatParamsChange={setChatParams}
         />
