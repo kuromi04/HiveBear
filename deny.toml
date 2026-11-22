@@ -60,6 +60,10 @@ ignore = [
     # Affects opening untrusted -wal files created by less trusted party; HiveBear only opens local user DB.
     "RUSTSEC-2026-0459",  # libsqlite3-sys: CVE-2026-119375 in bundled SQLite (rusqlite 0.32 pins 0.30.1).
 
+    # ── url: Url::origin() stack overflow on deeply nested blob: URLs ──
+    # HiveBear never calls Url::origin() on untrusted blob: URLs; 2.5.9 not yet available in crates.io lockfile.
+    "RUSTSEC-2026-0592",  # url: stack overflow in Url::origin() on nested blob: URLs.
+
     # ── zstd / zstd-safe: blocked by zstd 0.13 upstream dependency pin ──
     # RUSTSEC-2026-0391 affects with_context reuse across streams (mesh uses fresh frames).
     # RUSTSEC-2026-0398 affects seekable archive decompression (not used in HiveBear).
