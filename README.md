@@ -82,7 +82,7 @@
 The desktop and mobile apps join the mesh automatically at launch when `mesh.enabled` and `mesh.auto_join`
 are true (both default to `true`) — you no longer need to press "Join" on the Mesh page.
 
-- **Default coordinator:** `http://34.66.188.245` (plain HTTP on port 80). It can be changed at any time in
+- **Default coordinator:** `http://34.63.209.220` (plain HTTP on port 80). It can be changed at any time in
   **Mesh → Coordination Server**; the URL is normalized and validated before it is used.
 - **Self-hosting:** run the coordinator on any host reachable by all your nodes, then point the app at it:
 
@@ -95,7 +95,7 @@ are true (both default to `true`) — you no longer need to press "Join" on the 
   heartbeats to the same coordinator. Check the live registry from any machine:
 
   ```bash
-  curl http://34.66.188.245/dashboard     # {"nodes":[...],"total_active_nodes":N}
+  curl http://34.63.209.220/dashboard     # {"nodes":[...],"total_active_nodes":N}
   ```
 - **Android:** release APKs are built with `usesCleartextTraffic="true"` because a plain-`http://`
   coordinator is blocked by Android's API 28+ default policy. Keep that flag if you self-host over HTTP.

@@ -56,7 +56,7 @@ android {
             }
         }
         getByName("release") {
-            // The coordination server is plain HTTP (e.g. http://34.66.188.245), so
+            // The coordination server is plain HTTP (e.g. http://34.63.209.220), so
             // Android's API>=28 default-deny of cleartext traffic would make every
             // mesh register/heartbeat call fail with CLEARTEXT_NOT_PERMITTED.
             // Without this the release APK can never join the mesh.

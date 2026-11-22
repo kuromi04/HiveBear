@@ -456,7 +456,7 @@ mod tests {
     fn test_default_mesh_endpoint_matches_the_live_coordinator() {
         let mesh = MeshConfig::default();
         assert_eq!(mesh.coordination_server, DEFAULT_COORDINATOR_URL);
-        assert_eq!(mesh.coordination_server, "http://34.66.188.245");
+        assert_eq!(mesh.coordination_server, "http://34.63.209.220");
         assert_eq!(
             mesh.normalized_coordination_server(),
             mesh.coordination_server,
@@ -477,12 +477,12 @@ mod tests {
         // Existing config files may carry a trailing slash (which turns
         // `{base}/register` into `//register` -> 404) or no scheme at all.
         let mut config = Config::default();
-        config.mesh.coordination_server = "34.66.188.245/".into();
+        config.mesh.coordination_server = "34.63.209.220/".into();
         config.save_to(&path).unwrap();
 
         let loaded = Config::load_from(&path);
         assert_eq!(
-            loaded.mesh.coordination_server, "http://34.66.188.245",
+            loaded.mesh.coordination_server, "http://34.63.209.220",
             "load must heal missing scheme + trailing slash"
         );
 

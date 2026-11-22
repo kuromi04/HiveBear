@@ -4,7 +4,7 @@
 //! Run it against the deployment the app ships with:
 //!
 //! ```text
-//! HIVEBEAR_LIVE_COORDINATOR=http://34.66.188.245 \
+//! HIVEBEAR_LIVE_COORDINATOR=http://34.63.209.220 \
 //!   cargo test -p hivebear-mesh --test live_coordinator -- --nocapture
 //! ```
 //!
@@ -49,7 +49,7 @@ fn test_peer(addr: &str) -> PeerInfo {
 async fn register_discover_heartbeat_and_deregister_against_the_live_coordinator() {
     let Some(base_url) = live_coordinator() else {
         eprintln!(
-            "skipping: set HIVEBEAR_LIVE_COORDINATOR (e.g. http://34.66.188.245) to run this test"
+            "skipping: set HIVEBEAR_LIVE_COORDINATOR (e.g. http://34.63.209.220) to run this test"
         );
         return;
     };

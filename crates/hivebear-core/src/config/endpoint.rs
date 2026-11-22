@@ -1,13 +1,13 @@
 //! Coordination-server endpoint parsing, validation and normalization.
 //!
 //! The shipped deployment is plain HTTP on the standard port:
-//! [`DEFAULT_COORDINATOR_URL`] (`http://34.66.188.245`, i.e. port 80) is live —
+//! [`DEFAULT_COORDINATOR_URL`] (`http://34.63.209.220`, i.e. port 80) is live —
 //! `GET /health` returns `200 {"service":"hivebear-coordinator","status":"ok"}`.
 //! Port 80 is therefore correct for that host and must not be "fixed".
 //!
 //! Normalization is deliberately conservative: it only repairs input that
 //! silently breaks the HTTP contract —
-//! - a missing scheme (`34.66.188.245` → reqwest "relative URL without a base"),
+//! - a missing scheme (`34.63.209.220` → reqwest "relative URL without a base"),
 //! - a trailing slash or stray path (`http://host/` makes the client request
 //!   `POST http://host//register` → 404, which the mesh used to swallow),
 //! - whitespace around the value —
@@ -25,7 +25,7 @@ pub const DEFAULT_COORDINATOR_PORT: u16 = 7879;
 ///
 /// NOTE: change this one line when the deployment moves. Keep an explicit port
 /// only when it is not the scheme default.
-pub const DEFAULT_COORDINATOR_URL: &str = "http://34.66.188.245";
+pub const DEFAULT_COORDINATOR_URL: &str = "http://34.63.209.220";
 
 /// Reason a coordination-server URL was rejected.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -177,7 +177,7 @@ mod tests {
     /// for this deployment).
     #[test]
     fn built_in_default_matches_the_live_deployment() {
-        assert_eq!(DEFAULT_COORDINATOR_URL, "http://34.66.188.245");
+        assert_eq!(DEFAULT_COORDINATOR_URL, "http://34.63.209.220");
         assert_eq!(
             normalize_coordination_server(DEFAULT_COORDINATOR_URL),
             DEFAULT_COORDINATOR_URL
@@ -190,12 +190,12 @@ mod tests {
         // The critical regression guard: no hidden `:7879` and no hidden port
         // rewrite of a working host.
         assert_eq!(
-            normalize_coordination_server("34.66.188.245"),
-            "http://34.66.188.245"
+            normalize_coordination_server("34.63.209.220"),
+            "http://34.63.209.220"
         );
         assert_eq!(
-            normalize_coordination_server("http://34.66.188.245"),
-            "http://34.66.188.245"
+            normalize_coordination_server("http://34.63.209.220"),
+            "http://34.63.209.220"
         );
         assert_eq!(
             normalize_coordination_server("localhost"),
@@ -206,8 +206,8 @@ mod tests {
     #[test]
     fn explicit_ports_are_preserved_exactly() {
         for raw in [
-            "http://34.66.188.245:80",
-            "http://34.66.188.245:7879",
+            "http://34.63.209.220:80",
+            "http://34.63.209.220:7879",
             "http://host:9000",
             "192.168.1.5:8080",
             "https://mesh.hivebear.com",
@@ -236,8 +236,8 @@ mod tests {
         // `http://host/` + "/register" = "http://host//register" -> 404, which
         // the mesh used to report as a silent zero-peer state.
         assert_eq!(
-            normalize_coordination_server("http://34.66.188.245/"),
-            "http://34.66.188.245"
+            normalize_coordination_server("http://34.63.209.220/"),
+            "http://34.63.209.220"
         );
         assert_eq!(
             normalize_coordination_server("  http://host:7879///  "),
@@ -291,12 +291,12 @@ mod tests {
     #[test]
     fn validate_accepts_the_live_deployment_and_common_forms() {
         assert_eq!(
-            validate_coordination_server("http://34.66.188.245").unwrap(),
-            "http://34.66.188.245"
+            validate_coordination_server("http://34.63.209.220").unwrap(),
+            "http://34.63.209.220"
         );
         assert_eq!(
-            validate_coordination_server("34.66.188.245:7879").unwrap(),
-            "http://34.66.188.245:7879"
+            validate_coordination_server("34.63.209.220:7879").unwrap(),
+            "http://34.63.209.220:7879"
         );
         assert_eq!(
             validate_coordination_server("https://host/mesh").unwrap(),

@@ -23,7 +23,7 @@ pub struct CoordinationServerClient {
 
 impl CoordinationServerClient {
     pub fn new(base_url: String) -> Self {
-        // Heal the value before it becomes a request prefix: `34.66.188.245`
+        // Heal the value before it becomes a request prefix: `34.63.209.220`
         // (no scheme) is a relative URL, and a trailing slash turns
         // `{base}/register` into `//register` -> 404.
         let base_url = hivebear_core::config::normalize_coordination_server(&base_url);
@@ -508,12 +508,12 @@ mod tests {
     async fn base_url_is_normalized() {
         // No scheme: would otherwise be a relative URL and every request would
         // fail before leaving the process.
-        let client = CoordinationServerClient::new("34.66.188.245".into());
-        assert_eq!(client.base_url(), "http://34.66.188.245");
+        let client = CoordinationServerClient::new("34.63.209.220".into());
+        assert_eq!(client.base_url(), "http://34.63.209.220");
 
         // Trailing slash: would make the client POST to `//register` (404).
-        let client = CoordinationServerClient::new("http://34.66.188.245/".into());
-        assert_eq!(client.base_url(), "http://34.66.188.245");
+        let client = CoordinationServerClient::new("http://34.63.209.220/".into());
+        assert_eq!(client.base_url(), "http://34.63.209.220");
     }
 
     #[tokio::test]
