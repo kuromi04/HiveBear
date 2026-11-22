@@ -139,6 +139,17 @@ jobs:
             -dname "CN=HiveBear, OU=HiveBear, O=HiveBear, L=San Francisco, ST=California, C=US"
           cp packaging/android/release.keystore apps/desktop/src-tauri/gen/android/app/release.keystore
 
+          # Derive monotonically increasing versionCode from tag (e.g. v0.2.35 -> 20035)
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          if [[ "$TAG_VER" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            export ANDROID_VERSION_NAME="$TAG_VER"
+            export ANDROID_VERSION_CODE=$(( BASH_REMATCH[1] * 1000000 + BASH_REMATCH[2] * 10000 + BASH_REMATCH[3] ))
+          else
+            export ANDROID_VERSION_NAME="0.2.35"
+            export ANDROID_VERSION_CODE=20035
+          fi
+          echo "Android version: $ANDROID_VERSION_NAME (versionCode=$ANDROID_VERSION_CODE)"
+
           cd apps/desktop
           sed -i 's/default = \[.*\]/default = \[\]/' src-tauri/Cargo.toml
           export RUST_BACKTRACE=1
@@ -151,6 +162,8 @@ jobs:
             cat /tmp/android_build.log
             exit 1
           fi
+          # Also build lightweight ARM64-only APK (~40 MB) reusing already-compiled aarch64 .so
+          cargo tauri android build --apk --target aarch64 --ci --verbose --features mobile || true
           cd ../..
           mkdir -p android-artifacts
           find . -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} android-artifacts/ \;
@@ -173,15 +186,13 @@ jobs:
               apk="$CLEAN_NAME"
             fi
 
-            # Check alignment
-            if ! $ZIPALIGN -c 4 "$apk"; then
-              echo "Aligning $apk..."
-              $ZIPALIGN -f -p 4 "$apk" "${apk}.aligned"
-              mv "${apk}.aligned" "$apk"
-            fi
+            # Always zipalign cleanly with 4-byte + page alignment before signing
+            echo "Aligning $apk..."
+            $ZIPALIGN -f -p 4 "$apk" "${apk}.aligned"
+            mv "${apk}.aligned" "$apk"
 
-            # Always sign/re-sign with apksigner enforcing v1, v2, and v3
-            echo "Signing $apk with $KEYSTORE (v1 + v2 + v3 enabled)..."
+            # Sign cleanly with apksigner (v1 + v2 for maximum Android/MIUI/HyperOS compatibility)
+            echo "Signing $apk with $KEYSTORE (v1 + v2 enabled)..."
             $APKSIGNER sign \
               --ks "$KEYSTORE" \
               --ks-pass pass:hivebear123 \
@@ -189,7 +200,7 @@ jobs:
               --ks-key-alias hivebear \
               --v1-signing-enabled true \
               --v2-signing-enabled true \
-              --v3-signing-enabled true \
+              --v3-signing-enabled false \
               "$apk"
 
             # Verify signature strictly
@@ -250,8 +261,14 @@ jobs:
             [ -f "$f" ] && mv "$f" "${f//-unsigned/}"
           done
           for f in *universal*.apk *.apk; do
-            if [ -f "$f" ] && [ "$f" != "HiveBear.apk" ]; then
+            if [ -f "$f" ] && [ "$f" != "HiveBear.apk" ] && [ "$f" != "HiveBear-arm64.apk" ]; then
               cp "$f" HiveBear.apk
+              break
+            fi
+          done
+          for f in *arm64*.apk *aarch64*.apk; do
+            if [ -f "$f" ] && [ "$f" != "HiveBear-arm64.apk" ]; then
+              cp "$f" HiveBear-arm64.apk
               break
             fi
           done

@@ -21,8 +21,10 @@ android {
         applicationId = "com.hivebear.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
-        versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+        versionCode = (System.getenv("ANDROID_VERSION_CODE")
+            ?: tauriProperties.getProperty("tauri.android.versionCode", "1")).toInt()
+        versionName = System.getenv("ANDROID_VERSION_NAME")
+            ?: tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
     signingConfigs {
         create("release") {
