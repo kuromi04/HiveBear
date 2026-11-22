@@ -31,6 +31,7 @@ ignore = [
     "RUSTSEC-2025-0098",  # unic-ucd-version: unmaintained.
     "RUSTSEC-2025-0100",  # unic-ucd-ident: unmaintained.
     "RUSTSEC-2025-0119",  # number_prefix: unmaintained byte-size formatter (indicatif).
+    "RUSTSEC-2026-0543",  # chrono: unmaintained notice.
 
     # ── bincode: unmaintained, and we use it directly for the mesh wire format ──
     # Not a known vulnerability, but this is the one entry here with real blast
@@ -46,13 +47,18 @@ ignore = [
     "RUSTSEC-2026-0194",  # quick-xml: quadratic runtime on duplicate attribute names.
     "RUSTSEC-2026-0195",  # quick-xml: unbounded namespace allocation in NsReader.
 
-    # ── zip / tauri-plugin-updater: symlink extraction issues in zip 4.x ──
-    # Reached only via tauri-plugin-updater when extracting verified updater bundles.
-    # Bundles are signed with minisign and fetched only from official repo releases.
+    # ── zip / tauri-plugin-updater / candle-core: zip vulnerabilities blocked by upstream semver pins ──
+    # Reached only via tauri-plugin-updater (verified minisign bundles) and candle-core (not used for zip extraction in HiveBear).
     "RUSTSEC-2026-0367",  # zip: Insecure preservation of SUID/SGID bits during extraction.
-
     "RUSTSEC-2026-0368",  # zip: ZipArchive::extract symlink creation outside destination.
     "RUSTSEC-2026-0369",  # zip: ZipStreamReader::extract Unix permissions through symlinks.
+    "RUSTSEC-2026-0429",  # zip: ZipArchive::extract aborts on symlink entry with large declared size (candle-core pins zip 1.x).
+    "RUSTSEC-2026-0545",  # zip: AES entries returned without checking HMAC on truncated stream (updater only uses minisign).
+    "RUSTSEC-2026-0548",  # zip: ZipStreamReader header consistency (tauri-plugin-updater pins zip 4.x).
+
+    # ── libsqlite3-sys / rusqlite: bundled SQLite WAL vulnerability ──
+    # Affects opening untrusted -wal files created by less trusted party; HiveBear only opens local user DB.
+    "RUSTSEC-2026-0459",  # libsqlite3-sys: CVE-2026-119375 in bundled SQLite (rusqlite 0.32 pins 0.30.1).
 
     # ── zstd / zstd-safe: blocked by zstd 0.13 upstream dependency pin ──
     # RUSTSEC-2026-0391 affects with_context reuse across streams (mesh uses fresh frames).

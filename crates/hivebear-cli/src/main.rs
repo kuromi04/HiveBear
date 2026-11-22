@@ -2516,7 +2516,8 @@ async fn cmd_mesh_run(
                 return;
             }
             None => {
-                let err_msg = last_err.unwrap_or_else(|| "unreachable or connection timed out".to_string());
+                let err_msg =
+                    last_err.unwrap_or_else(|| "unreachable or connection timed out".to_string());
                 if let Some(ref peer_str) = peer_override {
                     eprintln!(
                         "{}: Failed to connect to remote mesh peer at '{}': {err_msg}",

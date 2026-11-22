@@ -75,9 +75,7 @@ pub async fn stream_chat(
             .unwrap_or_else(|e| e.into_inner());
         sessions.get(&handle_id).cloned().or_else(|| {
             // Robust fallback: if only 1 mesh peer is active or handle_id looks like a mesh handle, use it
-            if sessions.len() == 1 {
-                sessions.values().next().cloned()
-            } else if handle_id >= 100_000 || handle_id >= (1u64 << 50) {
+            if sessions.len() == 1 || handle_id >= 100_000 || handle_id >= (1u64 << 50) {
                 sessions.values().next().cloned()
             } else {
                 None
