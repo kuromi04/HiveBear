@@ -57,11 +57,15 @@ Si tú estás en México y tu amigo en Ucrania, ¿cómo se conectan sin abrir pu
 
 ---
 
-## ⚖️ 5. El Sistema de Karma: ¿Por qué compartir cómputo?
+## ⚖️ 5. El Sistema de Karma (`v0.2.37`): ¿Por qué compartir cómputo?
 
-* **Moneda de Confianza:** No cobramos dinero ni vendemos tus datos. HiveBear usa **Karma**.
-* **Prueba de Trabajo (Proof-of-Work Anti-Trampas):** Cada vez que tu PC procesa tokens para un amigo o celular en la calle, el receptor genera un recibo digital firmado criptográficamente. Al presentarlo al servidor, ganas puntos de Karma.
-* **Prioridad VIP:** Los usuarios con más Karma (`VIP_ALPHA`) obtienen prioridad absoluta en la cola cuando necesitan cómputo pesado, asegurando que la manada siempre premie a quienes aportan.
+* **Moneda de Confianza:** No cobramos dinero ni vendemos tus datos. HiveBear usa **Karma** persistido en el servidor coordinador (`http://34.63.209.220`).
+* **Recibos Criptográficos Ed25519 Anti-Trampas:** Cada vez que tu PC procesa tokens para otro nodo, el cliente firma un recibo digital (`WorkReceipt`) con su clave privada Ed25519 (`NodeIdentity`). El coordinador verifica la firma, bloquea el *auto-farming*, aplica un tope de `500 Karma/hora` por par y acredita **`+1 Karma` por cada 10 tokens** servidos.
+* **WiFi LAN 100% Gratis:** Chatear en tu propia red WiFi local entre tu PC (`192.168.x.x:7878`) y tu APK/Termux cuesta **`0 Karma`**, mientras que tu PC sigue ganando puntos por servir respuestas.
+* **Niveles y Cola de Prioridad Real (`BinaryHeap`):**
+  * `COMMUNITY` (`0 pts`): Cola estándar.
+  * `CONTRIBUTOR` (`1 – 1,999 pts`): Prioridad Nivel 2.
+  * `VIP_ALPHA` (`≥ 2,000 pts`): Prioridad Máxima Nivel 1 en toda la red Mesh.
 
 ---
 ---
