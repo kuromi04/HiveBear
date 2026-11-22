@@ -263,6 +263,7 @@ async fn stream_mesh_peer_chat(
         .map_err(|e| format!("Failed to send inference request to peer: {e}"))?;
 
     let mut full_text = String::new();
+    let mut tokens_received: u64 = 0;
     let mut stream_error: Option<String> = None;
 
     loop {
@@ -279,6 +280,7 @@ async fn stream_mesh_peer_chat(
                 if is_done {
                     break;
                 }
+                tokens_received = tokens_received.saturating_add(1);
                 full_text.push_str(&text);
                 let _ = window.emit("chat-token", &text);
             }
@@ -321,6 +323,30 @@ async fn stream_mesh_peer_chat(
 
     let _ = transport.disconnect(&peer_id).await;
     let _ = window.emit("chat-done", ());
+
+    // Award Karma to the remote worker via cryptographically signed Ed25519 WorkReceipt
+    if tokens_received > 0 && identity.node_id != peer_id {
+        let coord_url = {
+            let cfg = state.config.lock().unwrap_or_else(|e| e.into_inner());
+            cfg.mesh.coordination_server.clone()
+        };
+        if !coord_url.trim().is_empty() {
+            let is_lan = hivebear_mesh::karma::is_lan_addr(session.peer_addr);
+            let receipt = hivebear_mesh::karma::WorkReceipt::sign(
+                &identity,
+                peer_id.to_hex(),
+                tokens_received,
+                is_lan,
+            );
+            tauri::async_runtime::spawn(async move {
+                let client =
+                    hivebear_mesh::discovery::server::CoordinationServerClient::new(coord_url);
+                if let Err(e) = client.claim_karma_receipt(&receipt).await {
+                    tracing::debug!("Background Karma receipt submission skipped: {e}");
+                }
+            });
+        }
+    }
 
     if full_text.trim().is_empty() {
         return Err(match stream_error {

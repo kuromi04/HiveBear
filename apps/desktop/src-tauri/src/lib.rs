@@ -102,6 +102,7 @@ pub fn run() {
             commands::mesh::get_mesh_connection_status,
             commands::mesh::discover_mesh_peers,
             commands::mesh::connect_mesh_peer,
+            commands::mesh::get_karma_status,
             commands::chat::list_conversations,
             commands::chat::create_conversation,
             commands::chat::get_conversation_messages,

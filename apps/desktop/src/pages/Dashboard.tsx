@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { useProfile, useRecommendations } from "../hooks/useProfile";
 import { useLoadedModels, useModelLoader } from "../hooks/useInference";
 import { useInstalledModels, useModelInstall } from "../hooks/useRegistry";
+import { getKarmaStatus, type KarmaStatus } from "../lib/invoke";
 import ResourceGauge from "../components/ResourceGauge";
 import MeshStatusPill from "../components/MeshStatusPill";
 import { Card, Button, Badge, Surface, EmptyState } from "../components/ui";
@@ -18,7 +20,26 @@ export default function Dashboard() {
   const { models: installedModels, refresh: refreshInstalled } = useInstalledModels();
   const { loading: modelLoading, load } = useModelLoader();
   const { installing, install } = useModelInstall();
+  const [karmaStatus, setKarmaStatus] = useState<KarmaStatus | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let active = true;
+    const loadKarma = async () => {
+      try {
+        const ks = await getKarmaStatus();
+        if (active) setKarmaStatus(ks);
+      } catch {
+        // ignore transient offline error
+      }
+    };
+    loadKarma();
+    const timer = setInterval(loadKarma, 30_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   const hasModels = installedModels.length > 0;
   const hasLoaded = loadedModels.length > 0;
@@ -75,12 +96,30 @@ export default function Dashboard() {
                 ⚖️
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-text-primary">Karma & Priority Status</span>
-                  <Badge variant="accent">VIP Network Active</Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-text-primary">
+                    Karma: +{karmaStatus?.karma ?? 0} pts
+                  </span>
+                  <Badge
+                    variant={
+                      karmaStatus?.tier === "VIP_ALPHA"
+                        ? "accent"
+                        : karmaStatus?.tier === "CONTRIBUTOR"
+                          ? "success"
+                          : "default"
+                    }
+                  >
+                    {karmaStatus?.tier === "VIP_ALPHA"
+                      ? "VIP_ALPHA (Prioridad Máxima)"
+                      : karmaStatus?.tier === "CONTRIBUTOR"
+                        ? "CONTRIBUTOR"
+                        : "COMMUNITY"}
+                  </Badge>
                 </div>
                 <p className="text-[11px] text-text-muted">
-                  Comparte cómputo local con la red para subir de nivel y obtener inferencia prioritaria.
+                  {karmaStatus?.next_tier_at != null
+                    ? `Te faltan ${Math.max(0, karmaStatus.next_tier_at - karmaStatus.karma)} pts para el siguiente nivel. LAN local siempre es gratis.`
+                    : "Nivel máximo alcanzado: tus peticiones tienen prioridad absoluta en la red Mesh."}
                 </p>
               </div>
             </div>

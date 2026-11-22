@@ -2429,12 +2429,14 @@ async fn cmd_mesh_run(
 
                         // Stream tokens back
                         let mut response_text = String::new();
+                        let mut tokens_received: u64 = 0;
                         loop {
                             match transport.recv().await {
                                 Ok((_from, hivebear_mesh::transport::protocol::MeshMessage::InferenceToken {
                                     text, is_done, ..
                                 })) => {
                                     if is_done { break; }
+                                    tokens_received = tokens_received.saturating_add(1);
                                     print!("{}", text);
                                     std::io::stdout().flush().ok();
                                     response_text.push_str(&text);
@@ -2463,6 +2465,27 @@ async fn cmd_mesh_run(
                         println!();
                         println!();
 
+                        if tokens_received > 0 && identity.node_id != peer_id {
+                            let coord_url = hivebear_core::config::Config::load()
+                                .mesh
+                                .coordination_server;
+                            if !coord_url.trim().is_empty() {
+                                let receipt = hivebear_mesh::karma::WorkReceipt::sign(
+                                    &identity,
+                                    peer_id.to_hex(),
+                                    tokens_received,
+                                    hivebear_mesh::karma::is_lan_addr(peer_addr),
+                                );
+                                tokio::spawn(async move {
+                                    let client =
+                                        hivebear_mesh::discovery::server::CoordinationServerClient::new(
+                                            coord_url,
+                                        );
+                                    let _ = client.claim_karma_receipt(&receipt).await;
+                                });
+                            }
+                        }
+
                         if !response_text.is_empty() {
                             history.push(ChatMessage::assistant(response_text));
                         }
@@ -2486,12 +2509,14 @@ async fn cmd_mesh_run(
                     eprintln!("{}: {e}", "Failed to send request".red());
                 } else {
                     // Stream tokens
+                    let mut tokens_received: u64 = 0;
                     loop {
                         match transport.recv().await {
                             Ok((_from, hivebear_mesh::transport::protocol::MeshMessage::InferenceToken {
                                 text, is_done, ..
                             })) => {
                                 if is_done { break; }
+                                tokens_received = tokens_received.saturating_add(1);
                                 print!("{}", text);
                                 std::io::stdout().flush().ok();
                             }
@@ -2511,6 +2536,28 @@ async fn cmd_mesh_run(
                         }
                     }
                     println!();
+                    if tokens_received > 0 && identity.node_id != peer_id {
+                        let coord_url = hivebear_core::config::Config::load()
+                            .mesh
+                            .coordination_server;
+                        if !coord_url.trim().is_empty() {
+                            let receipt = hivebear_mesh::karma::WorkReceipt::sign(
+                                &identity,
+                                peer_id.to_hex(),
+                                tokens_received,
+                                hivebear_mesh::karma::is_lan_addr(peer_addr),
+                            );
+                            let client =
+                                hivebear_mesh::discovery::server::CoordinationServerClient::new(
+                                    coord_url,
+                                );
+                            let _ = tokio::time::timeout(
+                                std::time::Duration::from_secs(3),
+                                client.claim_karma_receipt(&receipt),
+                            )
+                            .await;
+                        }
+                    }
                 }
 
                 return;
@@ -2987,12 +3034,13 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
         orchestrator.clone(),
     ));
 
-    // Start the worker daemon with pipeline support
+    // Start the worker daemon with pipeline support and Karma priority queue
     let daemon = hivebear_mesh::pipeline::daemon::MeshWorkerDaemon::with_pipeline(
         handler,
         transport.clone(),
         pipeline_h,
-    );
+    )
+    .with_coordinator(coordinator.base_url());
     tokio::spawn(async move {
         daemon.run().await;
     });
@@ -3009,12 +3057,14 @@ async fn cmd_contribute(port: u16, model_override: Option<String>, coordinator_u
         .get_karma_balance(&node_id_hex)
         .await
         .unwrap_or(0);
-    let karma_tier = if karma_balance >= 500 {
-        "VIP_ALPHA (Priority Queue: Tier 1)".cyan().bold()
-    } else if karma_balance > 0 {
-        "CONTRIBUTOR (Priority Queue: Tier 2)".green()
-    } else {
-        "COMMUNITY (Standard Queue)".dimmed()
+    let karma_tier = match hivebear_mesh::karma::KarmaTier::from_balance(karma_balance) {
+        hivebear_mesh::karma::KarmaTier::VipAlpha => {
+            "VIP_ALPHA (Priority Queue: Tier 1)".cyan().bold()
+        }
+        hivebear_mesh::karma::KarmaTier::Contributor => {
+            "CONTRIBUTOR (Priority Queue: Tier 2)".green()
+        }
+        hivebear_mesh::karma::KarmaTier::Community => "COMMUNITY (Standard Queue)".dimmed(),
     };
 
     // Print the live dashboard

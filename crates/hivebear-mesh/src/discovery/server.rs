@@ -498,6 +498,36 @@ impl CoordinationServerClient {
             )))
         }
     }
+
+    /// POST /karma/claim — submit a signed Ed25519 [`WorkReceipt`] to award worker karma.
+    pub async fn claim_karma_receipt(&self, receipt: &crate::karma::WorkReceipt) -> Result<i64> {
+        let url = format!("{}/karma/claim", self.base_url);
+        let body = serde_json::json!({ "receipt": receipt });
+
+        let resp = self
+            .http
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| MeshError::Discovery(format!("Claim karma network error: {e}")))?;
+
+        if resp.status().is_success() {
+            let json: serde_json::Value = resp
+                .json()
+                .await
+                .map_err(|e| MeshError::Discovery(e.to_string()))?;
+            Ok(json
+                .get("new_balance")
+                .and_then(|b| b.as_i64())
+                .unwrap_or(0))
+        } else {
+            let err_msg = resp.text().await.unwrap_or_default();
+            Err(MeshError::Discovery(format!(
+                "Claim karma rejected: {err_msg}"
+            )))
+        }
+    }
 }
 
 #[cfg(test)]

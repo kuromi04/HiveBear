@@ -5,6 +5,7 @@ pub mod config;
 pub mod discovery;
 pub mod error;
 pub mod identity;
+pub mod karma;
 pub mod nat;
 pub mod node;
 pub mod peer;

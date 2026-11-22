@@ -1,6 +1,9 @@
+use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
@@ -9,12 +12,20 @@ use axum::routing::{delete, get, post};
 use axum::Router;
 use clap::Parser;
 use dashmap::DashMap;
+use hivebear_mesh::karma::{
+    apply_weekly_decay, cloud_karma_cost_for_tokens, karma_earned_for_tokens, KarmaTier,
+    WorkReceipt, MAX_PAIR_KARMA_PER_HOUR, MAX_TOKENS_PER_RECEIPT, RECEIPT_MAX_AGE_SECS,
+};
 use hivebear_mesh::PeerInfo;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
+
+const SECONDS_PER_HOUR: u64 = 3_600;
+const SECONDS_PER_DAY: u64 = 86_400;
+const SECONDS_PER_WEEK: u64 = 7 * SECONDS_PER_DAY;
 
 #[derive(Parser)]
 #[command(
@@ -30,6 +41,18 @@ struct Args {
     /// Address to bind to
     #[arg(short, long, default_value = "0.0.0.0")]
     bind: String,
+
+    /// Directory to persist the Karma ledger across restarts
+    #[arg(long, default_value = "./data")]
+    data_dir: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct PersistedLedger {
+    balances: HashMap<String, i64>,
+    last_decay_ts: u64,
+    #[serde(default)]
+    processed_receipts: HashMap<String, u64>,
 }
 
 struct NodeEntry {
@@ -41,7 +64,122 @@ struct CoordinatorState {
     nodes: DashMap<String, NodeEntry>,
     signals: DashMap<String, Vec<serde_json::Value>>,
     karma: DashMap<String, i64>,
-    processed_receipts: DashMap<String, Instant>,
+    /// Receipt replay cache: `receipt_key` -> unix timestamp seconds
+    processed_receipts: DashMap<String, u64>,
+    /// Rolling hourly rate limit per `(client, worker)` pair: `(window_start_ts, karma_earned)`
+    pair_hourly_karma: DashMap<String, (u64, i64)>,
+    last_decay_ts: AtomicU64,
+    ledger_path: PathBuf,
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+impl CoordinatorState {
+    fn load_or_new(data_dir: &std::path::Path) -> Self {
+        let ledger_path = data_dir.join("karma_ledger.json");
+        let karma = DashMap::new();
+        let processed_receipts = DashMap::new();
+        let mut last_decay_ts = unix_now();
+
+        if let Ok(bytes) = std::fs::read(&ledger_path) {
+            if let Ok(ledger) = serde_json::from_slice::<PersistedLedger>(&bytes) {
+                for (k, v) in ledger.balances {
+                    karma.insert(k, v);
+                }
+                let cutoff = unix_now().saturating_sub(SECONDS_PER_DAY);
+                for (k, ts) in ledger.processed_receipts {
+                    if ts >= cutoff {
+                        processed_receipts.insert(k, ts);
+                    }
+                }
+                if ledger.last_decay_ts > 0 {
+                    last_decay_ts = ledger.last_decay_ts;
+                }
+                info!(
+                    "Loaded persisted Karma ledger ({} accounts) from {}",
+                    karma.len(),
+                    ledger_path.display()
+                );
+            }
+        }
+
+        Self {
+            nodes: DashMap::new(),
+            signals: DashMap::new(),
+            karma,
+            processed_receipts,
+            pair_hourly_karma: DashMap::new(),
+            last_decay_ts: AtomicU64::new(last_decay_ts),
+            ledger_path,
+        }
+    }
+
+    fn persist_ledger(&self) {
+        if let Some(parent) = self.ledger_path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                warn!("Failed to create ledger directory: {e}");
+                return;
+            }
+        }
+
+        let balances: HashMap<String, i64> = self
+            .karma
+            .iter()
+            .map(|e| (e.key().clone(), *e.value()))
+            .collect();
+        let cutoff = unix_now().saturating_sub(SECONDS_PER_DAY);
+        let processed_receipts: HashMap<String, u64> = self
+            .processed_receipts
+            .iter()
+            .filter(|e| *e.value() >= cutoff)
+            .map(|e| (e.key().clone(), *e.value()))
+            .collect();
+
+        let ledger = PersistedLedger {
+            balances,
+            last_decay_ts: self.last_decay_ts.load(Ordering::Relaxed),
+            processed_receipts,
+        };
+
+        let tmp_path = self.ledger_path.with_extension("json.tmp");
+        match serde_json::to_vec_pretty(&ledger) {
+            Ok(data) => {
+                if let Err(e) = std::fs::write(&tmp_path, data) {
+                    warn!("Failed to write temporary Karma ledger: {e}");
+                    return;
+                }
+                if let Err(e) = std::fs::rename(&tmp_path, &self.ledger_path) {
+                    warn!("Failed to atomically persist Karma ledger: {e}");
+                }
+            }
+            Err(e) => warn!("Failed to serialize Karma ledger: {e}"),
+        }
+    }
+
+    fn maybe_apply_weekly_decay(&self) {
+        let now = unix_now();
+        let last = self.last_decay_ts.load(Ordering::Relaxed);
+        if now.saturating_sub(last) < SECONDS_PER_WEEK {
+            return;
+        }
+        if self
+            .last_decay_ts
+            .compare_exchange(last, now, Ordering::SeqCst, Ordering::Relaxed)
+            .is_ok()
+        {
+            for mut entry in self.karma.iter_mut() {
+                let updated = apply_weekly_decay(*entry.value());
+                *entry.value_mut() = updated;
+            }
+            info!("Applied weekly 10% Karma soft decay to inactive balances > 100");
+            self.persist_ledger();
+        }
+    }
 }
 
 type SharedState = Arc<CoordinatorState>;
@@ -56,14 +194,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let args = Args::parse();
-    let state = Arc::new(CoordinatorState {
-        nodes: DashMap::new(),
-        signals: DashMap::new(),
-        karma: DashMap::new(),
-        processed_receipts: DashMap::new(),
-    });
+    let state = Arc::new(CoordinatorState::load_or_new(&args.data_dir));
 
-    // Background task to prune stale nodes (no heartbeat for 60 seconds)
+    // Background task: prune stale nodes (60s), expire old receipts/rate-limits, and apply weekly decay
     let prune_state = state.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(15));
@@ -74,11 +207,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let active = now.duration_since(entry.last_seen) < Duration::from_secs(60);
                 if !active {
                     info!("Pruning inactive node: {}", id);
-                    // SECURITY FIX: Also clear their signals to prevent memory leak
                     prune_state.signals.remove(id);
                 }
                 active
             });
+
+            let now_unix = unix_now();
+            let receipt_cutoff = now_unix.saturating_sub(SECONDS_PER_DAY);
+            prune_state
+                .processed_receipts
+                .retain(|_, ts| *ts >= receipt_cutoff);
+            let hour_cutoff = now_unix.saturating_sub(SECONDS_PER_HOUR);
+            prune_state
+                .pair_hourly_karma
+                .retain(|_, (window_ts, _)| *window_ts >= hour_cutoff);
+
+            prune_state.maybe_apply_weekly_decay();
         }
     });
 
@@ -263,36 +407,35 @@ async fn matchmake(
 ) -> Json<serde_json::Value> {
     let available_peers = state.nodes.len();
     let requester_karma = state.karma.get(&req.node_id).map(|k| *k).unwrap_or(0);
+    let requester_tier = KarmaTier::from_balance(requester_karma);
 
-    // Sort peers: prioritizing high-karma contributors first
+    // Load-aware worker ranking: prioritize available VRAM + RAM capacity, with a small
+    // reliability tie-breaker from Karma, instead of blindly overloading one high-karma node.
     let mut ranked_peers: Vec<_> = state
         .nodes
         .iter()
+        .filter(|entry| entry.key() != &req.node_id)
         .map(|entry| {
             let p = &entry.value().info;
             let id = p.node_id.to_hex();
             let peer_karma = state.karma.get(&id).map(|k| *k).unwrap_or(0);
-            (id, p.addr.to_string(), peer_karma)
+            let capacity_score: u64 = p
+                .available_vram_bytes
+                .saturating_mul(2)
+                .saturating_add(p.available_memory_bytes);
+            (id, p.addr.to_string(), peer_karma, capacity_score)
         })
         .collect();
 
-    ranked_peers.sort_by_key(|a| std::cmp::Reverse(a.2));
-
-    let tier_status = if requester_karma >= 500 {
-        "VIP_ALPHA"
-    } else if requester_karma > 0 {
-        "CONTRIBUTOR"
-    } else {
-        "COMMUNITY"
-    };
+    ranked_peers.sort_by(|a, b| b.3.cmp(&a.3).then_with(|| b.2.cmp(&a.2)));
 
     Json(json!({
         "swarm_id": format!("swarm-{}", req.preferred_model.unwrap_or_else(|| "default".to_string())),
         "assigned_role": "worker",
         "total_peers_in_swarm": available_peers,
         "requester_karma": requester_karma,
-        "priority_tier": tier_status,
-        "ranked_peers": ranked_peers.into_iter().map(|(id, addr, karma)| json!({
+        "priority_tier": requester_tier.as_str(),
+        "ranked_peers": ranked_peers.into_iter().map(|(id, addr, karma, _)| json!({
             "node_id": id,
             "addr": addr,
             "karma": karma
@@ -310,21 +453,14 @@ async fn get_karma_balance(
     Query(query): Query<KarmaBalanceQuery>,
 ) -> Json<serde_json::Value> {
     let balance = state.karma.get(&query.node_id).map(|k| *k).unwrap_or(0);
+    let tier = KarmaTier::from_balance(balance);
     Json(json!({
         "node_id": query.node_id,
         "karma": balance,
-        "tier": if balance >= 500 { "VIP_ALPHA" } else if balance > 0 { "CONTRIBUTOR" } else { "COMMUNITY" }
+        "tier": tier.as_str(),
+        "priority_rank": tier.priority_rank(),
+        "next_tier_at": KarmaTier::next_tier_threshold(balance),
     }))
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-struct WorkReceipt {
-    client_node_id: String,
-    worker_node_id: String,
-    tokens_processed: u64,
-    timestamp: u64,
-    nonce: String,
-    signature_hash: String,
 }
 
 #[derive(Deserialize)]
@@ -338,7 +474,37 @@ async fn claim_karma(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let r = &req.receipt;
 
-    // 1. Anti-Replay verification
+    // 1. Block self-farming (a node cannot award Karma to itself)
+    if r.client_node_id == r.worker_node_id {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Self-farming rejected: client_node_id and worker_node_id must differ".to_string(),
+        ));
+    }
+
+    // 2. Cryptographic Ed25519 signature verification against client's public key
+    if let Err(reason) = r.verify_signature() {
+        return Err((StatusCode::FORBIDDEN, reason));
+    }
+
+    // 3. Timestamp freshness check (prevents old receipt replay after cache pruning)
+    let now = unix_now();
+    if now.abs_diff(r.timestamp) > RECEIPT_MAX_AGE_SECS {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Work receipt timestamp expired or too far in the future".to_string(),
+        ));
+    }
+
+    // 4. Token bounds check
+    if r.tokens_processed == 0 || r.tokens_processed > MAX_TOKENS_PER_RECEIPT {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid token range in work receipt".to_string(),
+        ));
+    }
+
+    // 5. Anti-Replay verification
     let receipt_key = format!("{}:{}:{}", r.client_node_id, r.nonce, r.timestamp);
     if state.processed_receipts.contains_key(&receipt_key) {
         return Err((
@@ -347,42 +513,66 @@ async fn claim_karma(
         ));
     }
 
-    // 2. Client verification: check if client exists or has interacted recently
-    let client_known = state.nodes.contains_key(&r.client_node_id);
-    if !client_known && r.tokens_processed > 5000 {
-        return Err((
-            StatusCode::FORBIDDEN,
-            "Client node not recognized for high-token claims".to_string(),
-        ));
+    // 6. Calculate Karma (10 tokens = 1 Karma, minimum 1) & rolling hourly pair cap
+    let points = karma_earned_for_tokens(r.tokens_processed);
+    let pair_key = format!("{}:{}", r.client_node_id, r.worker_node_id);
+    {
+        let mut pair_entry = state.pair_hourly_karma.entry(pair_key).or_insert((now, 0));
+        if now.saturating_sub(pair_entry.0) >= SECONDS_PER_HOUR {
+            *pair_entry = (now, 0);
+        }
+        if pair_entry.1 + points > MAX_PAIR_KARMA_PER_HOUR {
+            return Err((
+                StatusCode::TOO_MANY_REQUESTS,
+                format!(
+                    "Hourly Karma cap ({MAX_PAIR_KARMA_PER_HOUR} pts/hr) reached for this client-worker pair"
+                ),
+            ));
+        }
+        pair_entry.1 += points;
     }
 
-    // 3. Rate-limit / Cap per claim: prevent rogue node claiming millions in one shot
-    if r.tokens_processed == 0 || r.tokens_processed > 100_000 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "Invalid token range in work receipt".to_string(),
-        ));
-    }
+    // 7. Credit worker Karma
+    let new_balance = {
+        let mut current = state.karma.entry(r.worker_node_id.clone()).or_insert(0);
+        *current += points;
+        *current
+    };
 
-    // 4. Calculate Karma (1 token = 1 Karma point)
-    let points = r.tokens_processed as i64;
-    let mut current = state.karma.entry(r.worker_node_id.clone()).or_insert(0);
-    *current += points;
-    let new_balance = *current;
+    // 8. Gentle cloud sink (LAN is 100% free; community users at 0 are never blocked)
+    let cloud_cost = cloud_karma_cost_for_tokens(r.tokens_processed, r.is_lan);
+    let client_balance = if cloud_cost > 0 {
+        let mut client_entry = state.karma.entry(r.client_node_id.clone()).or_insert(0);
+        *client_entry = (*client_entry - cloud_cost).max(0);
+        *client_entry
+    } else {
+        state.karma.get(&r.client_node_id).map(|v| *v).unwrap_or(0)
+    };
 
-    // Record receipt as processed
-    state.processed_receipts.insert(receipt_key, Instant::now());
+    // 9. Record receipt as processed & persist ledger atomically to disk
+    state.processed_receipts.insert(receipt_key, now);
+    state.persist_ledger();
 
+    let worker_tier = KarmaTier::from_balance(new_balance);
     info!(
-        "🐺 Karma awarded! Worker {} received +{} Karma from client {} (New Balance: {})",
-        r.worker_node_id, points, r.client_node_id, new_balance
+        "🐺 Karma awarded! Worker {} received +{} Karma ({} tokens, lan={}) from {} -> New Balance: {} ({})",
+        r.worker_node_id,
+        points,
+        r.tokens_processed,
+        r.is_lan,
+        r.client_node_id,
+        new_balance,
+        worker_tier.as_str()
     );
 
     Ok(Json(json!({
         "status": "success",
         "worker_node_id": r.worker_node_id,
         "karma_awarded": points,
-        "new_balance": new_balance
+        "new_balance": new_balance,
+        "worker_tier": worker_tier.as_str(),
+        "client_karma_spent": cloud_cost,
+        "client_balance": client_balance
     })))
 }
 

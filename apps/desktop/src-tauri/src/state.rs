@@ -323,6 +323,7 @@ impl AppState {
             ));
 
         // Primary source: the coordination server.
+        let worker_coordinator_url = coordination_server.clone();
         let primary = Arc::new(
             hivebear_mesh::discovery::server::CoordinationServerClient::new(coordination_server),
         );
@@ -387,7 +388,8 @@ impl AppState {
         });
         let worker_transport = node.transport.clone();
         tauri::async_runtime::spawn(async move {
-            let daemon = hivebear_mesh::MeshWorkerDaemon::new(handler, worker_transport);
+            let daemon = hivebear_mesh::MeshWorkerDaemon::new(handler, worker_transport)
+                .with_coordinator(worker_coordinator_url);
             daemon.run().await;
         });
 

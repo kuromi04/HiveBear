@@ -443,3 +443,44 @@ pub async fn connect_mesh_peer(
         engine: "Mesh".into(),
     })
 }
+
+#[derive(serde::Serialize)]
+pub struct KarmaStatus {
+    pub node_id: String,
+    pub karma: i64,
+    pub tier: String,
+    pub next_tier_at: Option<i64>,
+    pub coordinator_url: String,
+}
+
+/// Fetch this node's live Karma balance and priority tier from the coordination server.
+#[tauri::command]
+pub async fn get_karma_status(state: State<'_, AppState>) -> CmdResult<KarmaStatus> {
+    let identity_path = state.paths.data_dir.join("node_identity.key");
+    let identity = hivebear_mesh::NodeIdentity::load_or_generate(&identity_path)
+        .unwrap_or_else(|_| hivebear_mesh::NodeIdentity::generate());
+    let node_id = identity.node_id.to_hex();
+
+    let coordinator_url = {
+        let cfg = state.config.lock().unwrap_or_else(|e| e.into_inner());
+        cfg.mesh.coordination_server.clone()
+    };
+
+    let karma = if !coordinator_url.trim().is_empty() {
+        let client = hivebear_mesh::discovery::server::CoordinationServerClient::new(
+            coordinator_url.clone(),
+        );
+        client.get_karma_balance(&node_id).await.unwrap_or(0)
+    } else {
+        0
+    };
+
+    let tier = hivebear_mesh::karma::KarmaTier::from_balance(karma);
+    Ok(KarmaStatus {
+        node_id,
+        karma,
+        tier: tier.as_str().to_string(),
+        next_tier_at: hivebear_mesh::karma::KarmaTier::next_tier_threshold(karma),
+        coordinator_url,
+    })
+}

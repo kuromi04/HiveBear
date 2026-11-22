@@ -7,7 +7,13 @@ services:
       dockerfile: crates/hivebear-coordinator/Dockerfile
     container_name: hivebear-coordinator
     ports:
+      - "80:7879"
       - "7879:7879"
+    volumes:
+      - coordinator_data:/data
     restart: always
     environment:
       - RUST_LOG=hivebear_coordinator=info,info
+
+volumes:
+  coordinator_data:

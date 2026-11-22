@@ -197,6 +197,18 @@ export function discoverMeshPeers(): Promise<DiscoveredMeshPeer[]> {
   return invoke("discover_mesh_peers", undefined, { silent: true });
 }
 
+export interface KarmaStatus {
+  node_id: string;
+  karma: number;
+  tier: string;
+  next_tier_at: number | null;
+  coordinator_url: string;
+}
+
+export function getKarmaStatus(): Promise<KarmaStatus> {
+  return invoke("get_karma_status", undefined, { silent: true });
+}
+
 // ── Chat Persistence ─────────────────────────────────────────────
 
 export function listConversations(): Promise<Conversation[]> {

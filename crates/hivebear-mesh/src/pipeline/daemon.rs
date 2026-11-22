@@ -1,20 +1,63 @@
 //! Mesh worker daemon: listens for inference requests and serves them
-//! using a caller-provided `MeshInferenceHandler`.
+//! using a caller-provided `MeshInferenceHandler` with a Karma priority queue.
 
-use std::sync::Arc;
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
+use dashmap::DashMap;
 use futures::StreamExt;
+use tokio::sync::Notify;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+use crate::discovery::server::CoordinationServerClient;
+use crate::karma::KarmaTier;
 use crate::peer::NodeId;
 use crate::protocol::{MeshInferenceHandler, MeshPipelineHandler};
 use crate::transport::protocol::MeshMessage;
 use crate::transport::MeshTransport;
 
+struct QueuedInference {
+    priority: u8,
+    seq: u64,
+    peer_id: NodeId,
+    session_id: Uuid,
+    model_id: String,
+    messages_json: String,
+    max_tokens: u32,
+    temperature: f32,
+}
+
+impl PartialEq for QueuedInference {
+    fn eq(&self, other: &Self) -> bool {
+        self.priority == other.priority && self.seq == other.seq
+    }
+}
+
+impl Eq for QueuedInference {}
+
+impl PartialOrd for QueuedInference {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for QueuedInference {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Higher priority first; FIFO (lower seq) breaks ties within the same tier
+        self.priority
+            .cmp(&other.priority)
+            .then_with(|| other.seq.cmp(&self.seq))
+    }
+}
+
 /// A background daemon that listens on the mesh transport for incoming
-/// `InferenceRequest` messages, runs inference via the supplied handler,
-/// and streams tokens back to the requesting peer.
+/// `InferenceRequest` messages, prioritizes them by Karma tier
+/// (`VIP_ALPHA > CONTRIBUTOR > COMMUNITY`), runs inference via the supplied
+/// handler, and streams tokens back to the requesting peer.
 ///
 /// Optionally also handles pipeline-parallel messages (`AssignLayers`,
 /// `ActivationTensor`) when a `MeshPipelineHandler` is provided.
@@ -22,6 +65,8 @@ pub struct MeshWorkerDaemon<H: MeshInferenceHandler> {
     handler: Arc<H>,
     transport: Arc<dyn MeshTransport>,
     pipeline_handler: Option<Arc<dyn MeshPipelineHandler>>,
+    coordinator: Option<Arc<CoordinationServerClient>>,
+    tier_cache: Arc<DashMap<String, (KarmaTier, Instant)>>,
 }
 
 impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
@@ -30,6 +75,8 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
             handler,
             transport,
             pipeline_handler: None,
+            coordinator: None,
+            tier_cache: Arc::new(DashMap::new()),
         }
     }
 
@@ -43,13 +90,83 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
             handler,
             transport,
             pipeline_handler: Some(pipeline_handler),
+            coordinator: None,
+            tier_cache: Arc::new(DashMap::new()),
         }
+    }
+
+    /// Attach a coordination server URL so the worker can prioritize incoming
+    /// requests by the requester's Karma tier (`VIP_ALPHA > CONTRIBUTOR > COMMUNITY`).
+    pub fn with_coordinator(mut self, coordinator_url: impl Into<String>) -> Self {
+        let url = coordinator_url.into();
+        if !url.trim().is_empty() {
+            self.coordinator = Some(Arc::new(CoordinationServerClient::new(url)));
+        }
+        self
+    }
+
+    async fn resolve_peer_tier(&self, peer_id: &NodeId) -> KarmaTier {
+        let Some(ref coord) = self.coordinator else {
+            return KarmaTier::Community;
+        };
+        let key = peer_id.to_hex();
+        if let Some(entry) = self.tier_cache.get(&key) {
+            if entry.1.elapsed() < Duration::from_secs(60) {
+                return entry.0;
+            }
+        }
+        let tier =
+            match tokio::time::timeout(Duration::from_millis(800), coord.get_karma_balance(&key))
+                .await
+            {
+                Ok(Ok(balance)) => KarmaTier::from_balance(balance),
+                _ => KarmaTier::Community,
+            };
+        self.tier_cache.insert(key, (tier, Instant::now()));
+        tier
     }
 
     /// Run the daemon loop. This will block (async) until the transport
     /// is shut down or an unrecoverable error occurs.
     pub async fn run(&self) {
-        info!("MeshWorkerDaemon: listening for inference requests");
+        info!("MeshWorkerDaemon: listening for inference requests (Karma priority queue active)");
+
+        let queue: Arc<Mutex<BinaryHeap<QueuedInference>>> =
+            Arc::new(Mutex::new(BinaryHeap::new()));
+        let notify = Arc::new(Notify::new());
+        let seq_counter = AtomicU64::new(0);
+
+        // Priority worker dispatcher: always serves highest-Karma tier next
+        let q_worker = queue.clone();
+        let n_worker = notify.clone();
+        let h_worker = self.handler.clone();
+        let t_worker = self.transport.clone();
+        tokio::spawn(async move {
+            loop {
+                let next_job = {
+                    let mut heap = q_worker.lock().unwrap_or_else(|e| e.into_inner());
+                    heap.pop()
+                };
+                match next_job {
+                    Some(job) => {
+                        Self::handle_request(
+                            h_worker.clone(),
+                            t_worker.clone(),
+                            job.peer_id,
+                            job.session_id,
+                            job.model_id,
+                            job.messages_json,
+                            job.max_tokens,
+                            job.temperature,
+                        )
+                        .await;
+                    }
+                    None => {
+                        n_worker.notified().await;
+                    }
+                }
+            }
+        });
 
         loop {
             let (peer_id, msg) = match self.transport.recv().await {
@@ -69,25 +186,47 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
                     temperature,
                     top_p: _,
                 } => {
+                    // Fast probe requests bypass the inference queue for instant discovery
+                    if model_id == "__probe__" || max_tokens == 0 {
+                        let handler = self.handler.clone();
+                        let transport = self.transport.clone();
+                        tokio::spawn(async move {
+                            Self::handle_request(
+                                handler,
+                                transport,
+                                peer_id,
+                                session_id,
+                                model_id,
+                                messages_json,
+                                max_tokens,
+                                temperature,
+                            )
+                            .await;
+                        });
+                        continue;
+                    }
+
+                    let tier = self.resolve_peer_tier(&peer_id).await;
+                    let seq = seq_counter.fetch_add(1, AtomicOrdering::Relaxed);
                     info!(
-                        "MeshWorkerDaemon: inference request from {peer_id} \
-                         (session {session_id}, model '{model_id}')"
+                        "MeshWorkerDaemon: queued inference request from {peer_id} \
+                         (tier={}, session {session_id}, model '{model_id}')",
+                        tier.as_str()
                     );
-                    let handler = self.handler.clone();
-                    let transport = self.transport.clone();
-                    tokio::spawn(async move {
-                        Self::handle_request(
-                            handler,
-                            transport,
+                    {
+                        let mut heap = queue.lock().unwrap_or_else(|e| e.into_inner());
+                        heap.push(QueuedInference {
+                            priority: tier.priority_rank(),
+                            seq,
                             peer_id,
                             session_id,
                             model_id,
                             messages_json,
                             max_tokens,
                             temperature,
-                        )
-                        .await;
-                    });
+                        });
+                    }
+                    notify.notify_one();
                 }
                 MeshMessage::Ping { timestamp_ms } => {
                     let _ = self
