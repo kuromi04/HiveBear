@@ -3,8 +3,8 @@ version: '3.8'
 services:
   coordinator:
     build:
-      context: ../..
-      dockerfile: crates/hivebear-coordinator/Dockerfile
+      context: .
+      dockerfile: Dockerfile.prebuilt
     container_name: hivebear-coordinator
     ports:
       - "80:7879"

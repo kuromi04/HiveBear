@@ -116,6 +116,21 @@ jobs:
           name: cli-${{ matrix.target }}
           path: hivebear-${{ matrix.target }}.zip
 
+      - name: Build & package coordinator (linux x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          cargo build --release -p hivebear-coordinator --target x86_64-unknown-linux-gnu
+          cd target/x86_64-unknown-linux-gnu/release
+          tar czf ../../../hivebear-coordinator-x86_64-unknown-linux-gnu.tar.gz hivebear-coordinator
+          cd ../../..
+
+      - name: Upload coordinator artifact (linux x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-coordinator-x86_64-unknown-linux-gnu
+          path: hivebear-coordinator-x86_64-unknown-linux-gnu.tar.gz
+
   build-desktop:
     name: Build Desktop (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}

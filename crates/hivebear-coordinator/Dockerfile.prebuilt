@@ -1,0 +1,11 @@
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+
+ARG COORDINATOR_URL="https://github.com/kuromi04/HiveBear/releases/latest/download/hivebear-coordinator-x86_64-unknown-linux-gnu.tar.gz"
+RUN curl -fSL "$COORDINATOR_URL" | tar -xz -C /usr/local/bin/ && chmod +x /usr/local/bin/hivebear-coordinator
+
+RUN mkdir -p /data
+VOLUME ["/data"]
+EXPOSE 7879
+ENTRYPOINT ["hivebear-coordinator", "--bind", "0.0.0.0", "--port", "7879", "--data-dir", "/data"]
