@@ -58,6 +58,14 @@
 
 ---
 
+### 📸 Official Screenshots (`v0.2.36` — Desktop `.exe` & Android `.apk`)
+
+| 🪟 Desktop Dashboard & Live Karma | 🌐 P2P Mesh & Karma Leaderboard | 📱 Android APK (`PC Mesh` & Local GGUF) |
+| :---: | :---: | :---: |
+| <img src="assets/screenshot-desktop-dashboard.png" alt="Desktop Dashboard" width="320" /> | <img src="assets/screenshot-desktop-mesh.png" alt="P2P Mesh Leaderboard" width="320" /> | <img src="assets/screenshot-mobile-apk.png" alt="Android APK Chat" width="180" /> |
+
+---
+
 ### 🌐 Architecture
 
 ```
