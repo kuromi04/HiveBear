@@ -18,7 +18,7 @@ export default function Chat() {
   const { models: installed } = useInstalledModels();
   const { loading: modelLoading, error: loadError, load } = useModelLoader();
   const [activeHandleId, setActiveHandleId] = useState<number | null>(null);
-  const { messages, streaming, send, stop, regenerate, editAndResend, clear, setMessages } =
+  const { messages, streaming, status, send, stop, regenerate, editAndResend, clear, setMessages } =
     useChat(activeHandleId);
   const [input, setInput] = useState("");
   const [chatParams, setChatParams] = useState<ChatParams>({ ...DEFAULT_CHAT_PARAMS });
@@ -470,6 +470,12 @@ export default function Chat() {
         )}
       </div>
 
+      {streaming && status && (
+        <div className="mx-3 mb-1 rounded-[var(--radius-md)] border border-paw-500/30 bg-paw-500/10 px-3 py-1.5 text-xs text-paw-400">
+          {status}
+        </div>
+      )}
+
       {/* Input */}
       {loaded.length > 0 && (
         <ChatInput
@@ -534,7 +540,7 @@ export default function Chat() {
                     <button
                       disabled={meshConnecting}
                       onClick={() => handleConnectPeerDirect(peer.addr, peer.serving_model_id)}
-                      className="shrink-0 rounded bg-paw-500 px-3 py-1 text-xs font-medium text-black hover:bg-paw-400 disabled:opacity-50"
+                      className="shrink-0 rounded-[var(--radius-md)] bg-paw-500 px-4 py-2 text-xs font-semibold text-black hover:bg-paw-400 disabled:opacity-50"
                     >
                       Conectar
                     </button>

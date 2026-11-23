@@ -1,7 +1,8 @@
 import type { SearchResult } from "../types";
 import { formatBytes } from "../types";
-import { Download, Trash2, Check, Loader, MessageSquare } from "lucide-react";
+import { Download, Trash2, Check, Loader, MessageSquare, Network } from "lucide-react";
 import { Badge } from "./ui";
+import { estimateModelGb, type TierInfo } from "../lib/modelTiers";
 
 interface ModelCardProps {
   result: SearchResult;
@@ -11,6 +12,10 @@ interface ModelCardProps {
   onInstall: (modelId: string) => void;
   onRemove: (modelId: string) => void;
   onUse?: (modelId: string) => void;
+  /** Hardware-aware tier for this model on the current device. */
+  tier?: TierInfo;
+  /** Open the Mesh page (used for models too big to run locally on mobile). */
+  onMesh?: () => void;
 }
 
 export default function ModelCard({
@@ -21,12 +26,16 @@ export default function ModelCard({
   onInstall,
   onRemove,
   onUse,
+  tier,
+  onMesh,
 }: ModelCardProps) {
   const { metadata: m, is_installed, compatibility_score } = result;
   const isThisInstalling = installing === m.id;
   const isThisRemoving = removing === m.id;
   const isThisLoading = loadingId === m.id;
   const busy = isThisInstalling || isThisRemoving || isThisLoading;
+  const tooBig = tier?.id === "too_big";
+  const sizeGb = estimateModelGb(m.params_billions);
 
   return (
     <div className={[
@@ -37,9 +46,9 @@ export default function ModelCard({
           ? "border-paw-500/40 shadow-[0_0_12px_-4px] shadow-paw-500/20"
           : "border-border",
     ].join(" ")}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-medium">{m.name}</h3>
+          <h3 className="truncate text-sm font-semibold sm:font-medium">{m.name}</h3>
           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-muted">
             <span>{m.params_billions}B params</span>
             <span>·</span>
@@ -51,7 +60,7 @@ export default function ModelCard({
             <p className="mt-1.5 line-clamp-2 text-xs text-text-secondary">{m.description}</p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5 [&>button]:min-h-10 sm:[&>button]:min-h-0 [&>button:first-child]:flex-1 sm:[&>button:first-child]:flex-none [&>button]:justify-center">
           {is_installed ? (
             <>
               {onUse && (
@@ -70,6 +79,12 @@ export default function ModelCard({
                 {isThisRemoving ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
               </button>
             </>
+          ) : tooBig && onMesh ? (
+            <button onClick={onMesh}
+              className="interactive-hover press-scale flex items-center gap-1.5 rounded-[var(--radius-md)] border border-paw-500/40 px-3 py-1.5 text-xs font-medium text-paw-400 hover:bg-paw-500/10">
+              <Network size={12} />
+              Usar desde PC
+            </button>
           ) : (
             <button disabled={busy} onClick={() => onInstall(m.id)}
               className="interactive-hover press-scale flex items-center gap-1.5 rounded-[var(--radius-md)] bg-paw-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-paw-600 disabled:opacity-50">
@@ -79,8 +94,11 @@ export default function ModelCard({
           )}
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-3 text-xs text-text-muted">
-        {compatibility_score != null && (
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-text-muted">
+        {tier && (
+          <Badge variant={tier.badge} title={tier.hint}>{tier.label} · ~{sizeGb.toFixed(1)} GB</Badge>
+        )}
+        {!tier && compatibility_score != null && (
           <Badge variant={compatibility_score >= 0.7 ? "success" : compatibility_score >= 0.4 ? "warning" : "danger"}>
             {(compatibility_score * 100).toFixed(0)}% compatible
           </Badge>

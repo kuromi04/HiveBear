@@ -3,7 +3,7 @@
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -29,6 +29,17 @@ struct QueuedInference {
     messages_json: String,
     max_tokens: u32,
     temperature: f32,
+    /// Set once real tokens flow (or the job ends) to stop keepalive pings.
+    keepalive_done: Arc<AtomicBool>,
+}
+
+/// Marks the keepalive flag as done when dropped, covering every exit path.
+struct KeepaliveGuard(Arc<AtomicBool>);
+
+impl Drop for KeepaliveGuard {
+    fn drop(&mut self) {
+        self.0.store(true, AtomicOrdering::Relaxed);
+    }
 }
 
 impl PartialEq for QueuedInference {
@@ -158,6 +169,7 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
                             job.messages_json,
                             job.max_tokens,
                             job.temperature,
+                            job.keepalive_done,
                         )
                         .await;
                     }
@@ -200,6 +212,7 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
                                 messages_json,
                                 max_tokens,
                                 temperature,
+                                Arc::new(AtomicBool::new(true)),
                             )
                             .await;
                         });
@@ -233,6 +246,7 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
 
                     let tier = self.resolve_peer_tier(&peer_id).await;
                     let seq = seq_counter.fetch_add(1, AtomicOrdering::Relaxed);
+                    let keepalive_done = Arc::new(AtomicBool::new(false));
                     let accepted = {
                         let mut heap = queue.lock().unwrap_or_else(|e| e.into_inner());
                         if heap.len() >= MAX_QUEUED_REQUESTS {
@@ -247,6 +261,7 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
                                 messages_json,
                                 max_tokens,
                                 temperature,
+                                keepalive_done: keepalive_done.clone(),
                             });
                             true
                         }
@@ -269,6 +284,12 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
                             .await;
                         continue;
                     }
+                    Self::spawn_keepalive(
+                        self.transport.clone(),
+                        peer_id.clone(),
+                        session_id,
+                        keepalive_done,
+                    );
                     info!(
                         "MeshWorkerDaemon: queued inference request from {peer_id} \
                          (tier={}, session {session_id}, model '{model_id}')",
@@ -381,6 +402,37 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
         }
     }
 
+    /// While a request is queued or its model is loading, periodically send empty
+    /// (non-final) tokens so the remote initiator knows the worker is alive and
+    /// does not time out on slow CPU model loads or a busy queue.
+    fn spawn_keepalive(
+        transport: Arc<dyn MeshTransport>,
+        peer_id: NodeId,
+        session_id: Uuid,
+        done: Arc<AtomicBool>,
+    ) {
+        tokio::spawn(async move {
+            let started = Instant::now();
+            loop {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                if done.load(AtomicOrdering::Relaxed)
+                    || started.elapsed() > Duration::from_secs(30 * 60)
+                {
+                    break;
+                }
+                let ping = MeshMessage::InferenceToken {
+                    session_id,
+                    text: String::new(),
+                    token_id: 0,
+                    is_done: false,
+                };
+                if transport.send(&peer_id, ping).await.is_err() {
+                    break;
+                }
+            }
+        });
+    }
+
     /// Serve a single inference request: call the handler, stream tokens
     /// back through the transport, and send an `InferenceComplete` at the end.
     #[allow(clippy::too_many_arguments)]
@@ -393,7 +445,9 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
         messages_json: String,
         max_tokens: u32,
         temperature: f32,
+        keepalive_done: Arc<AtomicBool>,
     ) {
+        let _keepalive_guard = KeepaliveGuard(keepalive_done.clone());
         let stream_result = handler
             .handle_inference(&model_id, &messages_json, max_tokens, temperature)
             .await;
@@ -423,6 +477,7 @@ impl<H: MeshInferenceHandler + 'static> MeshWorkerDaemon<H> {
         while let Some(result) = token_stream.next().await {
             match result {
                 Ok(text) => {
+                    keepalive_done.store(true, AtomicOrdering::Relaxed);
                     full_text.push_str(&text);
                     token_count += 1;
 

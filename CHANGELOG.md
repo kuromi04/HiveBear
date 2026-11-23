@@ -5,6 +5,16 @@ All notable changes to HiveBear are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.39] - 2026-11-23
+
+### Added
+- **Segmentación de modelos por hardware (PC y móvil)**: el catálogo se agrupa en Ligeros / Equilibrados / Potentes / Solo PC según la RAM/VRAM real del dispositivo, con banner del equipo, filtros por segmento y tamaño estimado en cada tarjeta. En móvil el límite local ya no es fijo (3.5B) sino derivado de la RAM.
+- **Pestaña Mesh en la barra inferior móvil** y botón "Usar desde PC" para modelos demasiado grandes.
+- **Estado en vivo del chat Mesh** ("PC cargando el modelo…").
+
+### Fixed
+- **APK no conectaba con el modelo de la PC**: el worker envía keepalives cada 5 s mientras la petición está en cola o el modelo carga (el móvil ya no da timeout con modelos 9B en CPU); el escaneo LAN ahora barre toda la subred /24 en paralelo en vez de IPs fijas.
+
 ## [0.2.38] - 2026-11-22
 
 ### Fixed
@@ -53,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Universal AI backend for IDE extensions (OpenAI-compatible API server)
 - Comprehensive security hardening across all crates
 
+[0.2.39]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.39
 [0.2.38]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.38
 [0.2.37]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.37
 [0.1.5]: https://github.com/kuromi04/HiveBear/releases/tag/v0.1.5

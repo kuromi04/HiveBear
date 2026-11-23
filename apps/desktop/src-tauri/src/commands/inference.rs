@@ -254,7 +254,9 @@ async fn stream_mesh_peer_chat(
         session_id,
         model_id: session.model_name.clone(),
         messages_json,
-        max_tokens: max_tokens.unwrap_or(2048),
+        // Remote CPU nodes may be slow; cap default reply length so one answer never
+        // blocks the worker queue for many minutes.
+        max_tokens: max_tokens.unwrap_or(1024).min(2048),
         temperature: temperature.unwrap_or(0.7),
         top_p: 0.9,
     };
@@ -268,8 +270,17 @@ async fn stream_mesh_peer_chat(
     let mut tokens_received: u64 = 0;
     let mut stream_error: Option<String> = None;
 
+    let mut saw_keepalive = false;
     loop {
-        let wait_secs = if tokens_received == 0 { 300 } else { 120 };
+        // Workers >= v0.2.39 ping every 5s while queued / loading the model, so a silent
+        // peer is truly dead after 45s. Older workers get the generous legacy timeout.
+        let wait_secs = if saw_keepalive {
+            45
+        } else if tokens_received == 0 {
+            300
+        } else {
+            120
+        };
         let recv_fut =
             tokio::time::timeout(std::time::Duration::from_secs(wait_secs), transport.recv());
         match recv_fut.await {
@@ -283,6 +294,15 @@ async fn stream_mesh_peer_chat(
             ))) => {
                 if is_done {
                     break;
+                }
+                if text.is_empty() {
+                    // Worker keepalive (queued / loading model): reset the timer only.
+                    saw_keepalive = true;
+                    let _ = window.emit("chat-status", "PC cargando el modelo…");
+                    continue;
+                }
+                if tokens_received == 0 {
+                    let _ = window.emit("chat-status", "");
                 }
                 tokens_received = tokens_received.saturating_add(1);
                 full_text.push_str(&text);

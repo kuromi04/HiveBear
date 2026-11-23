@@ -53,10 +53,11 @@ function errorText(e: unknown): string {
 export function useChat(handleId: number | null) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [status, setStatus] = useState("");
   const streamBuffer = useRef("");
   const messagesRef = useRef<DisplayMessage[]>([]);
   const stopRef = useRef(false);
-  const unlistenRefs = useRef<{ token?: UnlistenFn; error?: UnlistenFn }>({});
+  const unlistenRefs = useRef<{ token?: UnlistenFn; error?: UnlistenFn; status?: UnlistenFn }>({});
   messagesRef.current = messages;
 
   const send = useCallback(async (
@@ -94,6 +95,10 @@ export function useChat(handleId: number | null) {
           updated[updated.length - 1] = { role: "assistant", content };
           return updated;
         });
+      });
+
+      unlistenRefs.current.status = await listen<string>("chat-status", (event) => {
+        setStatus(event.payload ?? "");
       });
 
       unlistenRefs.current.error = await listen<string>("chat-error", (event) => {
@@ -134,7 +139,9 @@ export function useChat(handleId: number | null) {
     } finally {
       unlistenRefs.current.token?.();
       unlistenRefs.current.error?.();
+      unlistenRefs.current.status?.();
       unlistenRefs.current = {};
+      setStatus("");
       setStreaming(false);
     }
 
@@ -151,7 +158,9 @@ export function useChat(handleId: number | null) {
     // Unlisten immediately so we stop appending tokens
     unlistenRefs.current.token?.();
     unlistenRefs.current.error?.();
+    unlistenRefs.current.status?.();
     unlistenRefs.current = {};
+    setStatus("");
     // Finalize the partial content
     if (streamBuffer.current) {
       const content = streamBuffer.current;
@@ -198,5 +207,5 @@ export function useChat(handleId: number | null) {
 
   const clear = useCallback(() => setMessages([]), []);
 
-  return { messages, streaming, send, stop, regenerate, editAndResend, clear, setMessages };
+  return { messages, streaming, status, send, stop, regenerate, editAndResend, clear, setMessages };
 }

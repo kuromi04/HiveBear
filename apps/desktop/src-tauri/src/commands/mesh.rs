@@ -287,51 +287,65 @@ pub async fn discover_mesh_peers(state: State<'_, AppState>) -> CmdResult<Vec<Di
     });
 
     if !has_lan {
-        let mut candidates = Vec::new();
-        // Priority target: user's PC address
-        if let Ok(pc_addr) = "192.168.0.4:7878".parse::<std::net::SocketAddr>() {
-            candidates.push(pc_addr);
-        }
+        use futures::StreamExt;
+
+        let mut candidates: Vec<std::net::SocketAddr> = Vec::new();
         if let Some(std::net::IpAddr::V4(local_v4)) = hivebear_mesh::nat::discover_local_ip() {
             let oct = local_v4.octets();
-            for host in [4, 2, 3, 5, 10, 100] {
-                if host != oct[3] {
-                    let addr = std::net::SocketAddr::new(
-                        std::net::IpAddr::V4(std::net::Ipv4Addr::new(oct[0], oct[1], oct[2], host)),
-                        7878,
-                    );
-                    if !candidates.contains(&addr) {
-                        candidates.push(addr);
-                    }
+            // Likely router-assigned PC addresses first, then sweep the whole /24 subnet.
+            let mut hosts: Vec<u8> = vec![2, 3, 4, 5, 6, 7, 8, 9, 10, 100, 101, 102];
+            hosts.extend(1..=254u8);
+            for host in hosts {
+                if host == oct[3] {
+                    continue;
+                }
+                let addr = std::net::SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::new(oct[0], oct[1], oct[2], host)),
+                    7878,
+                );
+                if !candidates.contains(&addr) {
+                    candidates.push(addr);
                 }
             }
+        } else if let Ok(pc_addr) = "192.168.0.4:7878".parse::<std::net::SocketAddr>() {
+            candidates.push(pc_addr);
         }
-        for cand in candidates {
-            if let Ok(model_opt) = probe_peer_model(&state, cand, 350).await {
-                let dummy_id = hivebear_mesh::NodeIdentity::generate().node_id;
-                let peer_info = hivebear_mesh::PeerInfo {
-                    node_id: dummy_id.clone(),
-                    hardware: hivebear_core::profile(),
-                    available_memory_bytes: 8 * 1024 * 1024 * 1024,
-                    available_vram_bytes: 0,
-                    network_bandwidth_mbps: 100.0,
-                    latency_ms: None,
-                    tier: hivebear_mesh::MeshTier::Free,
-                    reputation_score: 1.0,
-                    addr: cand,
-                    external_addr: None,
-                    nat_type: hivebear_mesh::NatType::Unknown,
-                    latency_map: std::collections::HashMap::new(),
-                    serving_model_id: model_opt.or(Some("Modelo en PC".into())),
-                    swarm_id: None,
-                    draft_capability: None,
-                };
-                peer_map.insert(dummy_id.to_hex(), peer_info);
-                break;
-            }
+
+        let state_ref: &AppState = &state;
+        let found: Vec<(std::net::SocketAddr, Option<String>)> = futures::stream::iter(candidates)
+            .map(|cand| async move {
+                probe_peer_model(state_ref, cand, 600)
+                    .await
+                    .ok()
+                    .map(|m| (cand, m))
+            })
+            .buffer_unordered(48)
+            .filter_map(|x| async move { x })
+            .collect()
+            .await;
+
+        for (cand, model_opt) in found {
+            let dummy_id = hivebear_mesh::NodeIdentity::generate().node_id;
+            let peer_info = hivebear_mesh::PeerInfo {
+                node_id: dummy_id.clone(),
+                hardware: hivebear_core::profile(),
+                available_memory_bytes: 8 * 1024 * 1024 * 1024,
+                available_vram_bytes: 0,
+                network_bandwidth_mbps: 100.0,
+                latency_ms: None,
+                tier: hivebear_mesh::MeshTier::Free,
+                reputation_score: 1.0,
+                addr: cand,
+                external_addr: None,
+                nat_type: hivebear_mesh::NatType::Unknown,
+                latency_map: std::collections::HashMap::new(),
+                serving_model_id: model_opt.or(Some("Modelo en PC".into())),
+                swarm_id: None,
+                draft_capability: None,
+            };
+            peer_map.insert(dummy_id.to_hex(), peer_info);
         }
     }
-
     let mut list = Vec::new();
     for (hex_id, mut info) in peer_map {
         let is_lan = match info.addr.ip() {

@@ -1,11 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useInstalledModels, useModelInstall, useModelRemove, useModelSearch } from "../hooks/useRegistry";
 import { useModelLoader } from "../hooks/useInference";
 import ModelCard from "../components/ModelCard";
 import DownloadProgress from "../components/DownloadProgress";
 import { Surface, EmptyState } from "../components/ui";
-import { Search as SearchIcon, Package } from "lucide-react";
+import { Search as SearchIcon, Package, Cpu } from "lucide-react";
+import { useProfile } from "../hooks/useProfile";
+import { useIsMobile } from "../hooks/useDevice";
+import { classifyModel, deviceBudget, TIER_ORDER, tierTitle, type TierId } from "../lib/modelTiers";
+import type { SearchResult } from "../types";
+
+type TierFilter = "all" | "recommended" | TierId;
 
 export default function ModelBrowser() {
   const navigate = useNavigate();
@@ -17,6 +23,29 @@ export default function ModelBrowser() {
   const { load, error: loadError } = useModelLoader();
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
   const [tab, setTab] = useState<"search" | "installed">("search");
+  const [tierFilter, setTierFilter] = useState<TierFilter>("recommended");
+  const { profile } = useProfile();
+  const viewportMobile = useIsMobile();
+  const budget = useMemo(() => deviceBudget(profile, viewportMobile), [profile, viewportMobile]);
+  const goMesh = useCallback(() => navigate("/mesh"), [navigate]);
+
+  const tiered = useMemo(() => {
+    const withTier = results.map((r) => ({ r, tier: classifyModel(r.metadata.params_billions, budget) }));
+    const counts: Record<TierId, number> = { light: 0, balanced: 0, powerful: 0, too_big: 0 };
+    withTier.forEach((x) => { counts[x.tier.id] += 1; });
+    const visible = withTier.filter(({ tier }) => {
+      if (tierFilter === "all") return true;
+      if (tierFilter === "recommended") return tier.id === "light" || tier.id === "balanced";
+      return tier.id === tierFilter;
+    });
+    const groups = TIER_ORDER.map((id) => ({
+      id,
+      items: visible
+        .filter((x) => x.tier.id === id)
+        .sort((a, b) => b.r.metadata.params_billions - a.r.metadata.params_billions),
+    })).filter((g) => g.items.length > 0);
+    return { counts, groups, total: visible.length };
+  }, [results, budget, tierFilter]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Load top models on initial mount
@@ -101,6 +130,37 @@ export default function ModelBrowser() {
               </button>
             </form>
           )}
+
+          {tab === "search" && (
+            <>
+              <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-xs text-text-secondary">
+                <Cpu size={14} className="shrink-0 text-paw-400" />
+                <span className="min-w-0">
+                  Tu equipo: <strong className="text-text-primary">{budget.label}</strong> · modelos de hasta ~{budget.maxParamsB.toFixed(1)}B parámetros
+                </span>
+              </div>
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+                {([
+                  ["recommended", `Recomendados (${tiered.counts.light + tiered.counts.balanced})`],
+                  ["light", `⚡ Ligeros (${tiered.counts.light})`],
+                  ["balanced", `⚖️ Equilibrados (${tiered.counts.balanced})`],
+                  ["powerful", `🚀 Potentes (${tiered.counts.powerful})`],
+                  ["too_big", budget.isMobile ? `🖥️ Solo PC (${tiered.counts.too_big})` : `⛔ Muy grandes (${tiered.counts.too_big})`],
+                  ["all", `Todos (${results.length})`],
+                ] as [TierFilter, string][]).map(([id, label]) => (
+                  <button key={id} onClick={() => setTierFilter(id)}
+                    className={[
+                      "shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs interactive-hover",
+                      tierFilter === id
+                        ? "border-paw-500 bg-paw-500/15 font-medium text-paw-400"
+                        : "border-border text-text-muted hover:text-text-secondary",
+                    ].join(" ")}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Download progress & error handling */}
@@ -148,10 +208,24 @@ export default function ModelBrowser() {
                 )}
               </EmptyState>
             ) : (
-              <div className="grid gap-3">
-                {results.map((r) => (
-                  <ModelCard key={r.metadata.id} result={r} installing={installing}
-                    removing={removing} loadingId={loadingModelId} onInstall={handleInstall} onRemove={handleRemove} onUse={handleUseModel} />
+              <div className="space-y-5">
+                {tiered.groups.length === 0 && (
+                  <p className="text-sm text-text-muted">
+                    Ningún modelo en esta categoría. Prueba con otro segmento o busca algo distinto.
+                  </p>
+                )}
+                {tiered.groups.map((g) => (
+                  <section key={g.id} className="space-y-2">
+                    <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                      {tierTitle(g.id, budget.isMobile)} <span className="text-text-muted">({g.items.length})</span>
+                    </h2>
+                    <div className="grid gap-3">
+                      {g.items.map(({ r, tier }: { r: SearchResult; tier: ReturnType<typeof classifyModel> }) => (
+                        <ModelCard key={r.metadata.id} result={r} installing={installing} tier={tier} onMesh={goMesh}
+                          removing={removing} loadingId={loadingModelId} onInstall={handleInstall} onRemove={handleRemove} onUse={handleUseModel} />
+                      ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             )

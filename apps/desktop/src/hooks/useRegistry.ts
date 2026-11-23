@@ -13,7 +13,7 @@ export function useModelSearch() {
     setError(null);
     try {
       const q = query.trim();
-      const r = await searchModels(q, 20);
+      const r = await searchModels(q, 80);
       setResults(r);
     } catch (e) {
       setError(String(e));
