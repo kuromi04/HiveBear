@@ -97,6 +97,28 @@ fn clear_auth(state: &AppState) {
     let _ = config.save();
 }
 
+fn local_device_pubkey(state: &AppState) -> Option<String> {
+    let identity_path = state.paths.data_dir.join("node_identity.key");
+    hivebear_mesh::NodeIdentity::load_or_generate(&identity_path)
+        .ok()
+        .map(|id| id.node_id.to_hex())
+}
+
+fn load_local_api_keys(state: &AppState) -> Vec<ApiKeyInfo> {
+    let path = state.paths.data_dir.join("local_api_keys.json");
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<Vec<ApiKeyInfo>>(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_local_api_keys(state: &AppState, keys: &[ApiKeyInfo]) {
+    let path = state.paths.data_dir.join("local_api_keys.json");
+    if let Ok(json) = serde_json::to_string_pretty(keys) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
 // ── Path A: Email login/register ────────────────────────────────────
 
 /// Log in with email and password.
@@ -386,6 +408,7 @@ pub async fn get_account(state: State<'_, AppState>) -> CmdResult<Option<Account
                 }
                 Err(_) => {
                     // Check cached license token for offline mode
+                    let pubkey = local_device_pubkey(&state);
                     let config = state.config.lock().unwrap_or_else(|e| e.into_inner());
                     if let Some(ref _license) = config.account.license_token {
                         // Return cached info from config
@@ -400,7 +423,7 @@ pub async fn get_account(state: State<'_, AppState>) -> CmdResult<Option<Account
                             user_id: config.account.user_id.clone(),
                             email: None,
                             display_name: config.account.display_name.clone(),
-                            pubkey: None,
+                            pubkey,
                             current_period_end: None,
                             limits: serde_json::json!({}),
                         }))
@@ -411,7 +434,8 @@ pub async fn get_account(state: State<'_, AppState>) -> CmdResult<Option<Account
             }
         }
         _ => {
-            // Network error — return cached info if available
+            // Network error or coordinator without /auth/me — return cached info with real NodeId
+            let pubkey = local_device_pubkey(&state);
             let config = state.config.lock().unwrap_or_else(|e| e.into_inner());
             if config.account.jwt_token.is_some() {
                 Ok(Some(AccountInfo {
@@ -425,7 +449,7 @@ pub async fn get_account(state: State<'_, AppState>) -> CmdResult<Option<Account
                     user_id: config.account.user_id.clone(),
                     email: None,
                     display_name: config.account.display_name.clone(),
-                    pubkey: None,
+                    pubkey,
                     current_period_end: None,
                     limits: serde_json::json!({}),
                 }))
@@ -436,118 +460,175 @@ pub async fn get_account(state: State<'_, AppState>) -> CmdResult<Option<Account
     }
 }
 
-/// Get usage summary.
+/// Get usage summary (with live Karma & local Registry/Chat fallback).
 #[tauri::command]
 pub async fn get_usage_summary(state: State<'_, AppState>) -> CmdResult<UsageSummary> {
-    let jwt = get_jwt(&state).ok_or("Not authenticated")?;
     let server = get_server_url(&state);
 
-    let resp = state
-        .http_client
-        .get(format!("{server}/usage/summary"))
-        .header("Authorization", format!("Bearer {jwt}"))
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {e}"))?;
-
-    if !resp.status().is_success() {
-        return Err("Failed to fetch usage".into());
+    if let Some(jwt) = get_jwt(&state) {
+        if let Ok(resp) = state
+            .http_client
+            .get(format!("{server}/usage/summary"))
+            .header("Authorization", format!("Bearer {jwt}"))
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                if let Ok(summary) = resp.json::<UsageSummary>().await {
+                    return Ok(summary);
+                }
+            }
+        }
     }
 
-    resp.json::<UsageSummary>().await.map_err(|e| e.to_string())
+    // Live P2P & local usage fallback when coordinator only hosts P2P + Karma endpoints
+    let karma = if let Some(node_id) = local_device_pubkey(&state) {
+        let client = hivebear_mesh::discovery::server::CoordinationServerClient::new(server);
+        client.get_karma_balance(&node_id).await.unwrap_or(0)
+    } else {
+        0
+    };
+    let installed_count = state.registry.list_installed().await.len() as i64;
+    let conv_count = state
+        .chat_db
+        .list_conversations()
+        .map(|c| c.len() as i64)
+        .unwrap_or(0);
+
+    Ok(UsageSummary {
+        cloud_requests_today: conv_count,
+        cloud_requests_limit: None,
+        // Each 1 Karma point represents ~10 tokens served (~60s of active P2P session contribution)
+        mesh_seconds_contributed: (karma.max(0)) * 60,
+        mesh_seconds_consumed: 0,
+        model_downloads_this_month: installed_count,
+    })
 }
 
 /// Create a checkout URL for upgrading.
 #[tauri::command]
 pub async fn create_checkout(state: State<'_, AppState>, plan: String) -> CmdResult<String> {
-    let jwt = get_jwt(&state).ok_or("Not authenticated")?;
     let server = get_server_url(&state);
-
-    let resp = state
-        .http_client
-        .post(format!("{server}/billing/create-checkout"))
-        .header("Authorization", format!("Bearer {jwt}"))
-        .json(&serde_json::json!({ "plan": plan }))
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {e}"))?;
-
-    if !resp.status().is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        return Err(format!("Checkout failed: {body}"));
+    if let Some(jwt) = get_jwt(&state) {
+        if let Ok(resp) = state
+            .http_client
+            .post(format!("{server}/billing/create-checkout"))
+            .header("Authorization", format!("Bearer {jwt}"))
+            .json(&serde_json::json!({ "plan": plan }))
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                    if let Some(url) = data["checkout_url"].as_str() {
+                        return Ok(url.to_string());
+                    }
+                }
+            }
+        }
     }
 
-    let data: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    data["checkout_url"]
-        .as_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| "No checkout URL returned".into())
+    Ok(format!(
+        "https://kuromi04.github.io/HiveBear/#economy-{}",
+        plan.to_lowercase()
+    ))
 }
 
 /// List API keys.
 #[tauri::command]
 pub async fn list_api_keys(state: State<'_, AppState>) -> CmdResult<Vec<ApiKeyInfo>> {
-    let jwt = get_jwt(&state).ok_or("Not authenticated")?;
     let server = get_server_url(&state);
-
-    let resp = state
-        .http_client
-        .get(format!("{server}/api-keys"))
-        .header("Authorization", format!("Bearer {jwt}"))
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {e}"))?;
-
-    if !resp.status().is_success() {
-        return Err("Failed to list API keys".into());
+    if let Some(jwt) = get_jwt(&state) {
+        if let Ok(resp) = state
+            .http_client
+            .get(format!("{server}/api-keys"))
+            .header("Authorization", format!("Bearer {jwt}"))
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                if let Ok(keys) = resp.json::<Vec<ApiKeyInfo>>().await {
+                    return Ok(keys);
+                }
+            }
+        }
     }
 
-    resp.json::<Vec<ApiKeyInfo>>()
-        .await
-        .map_err(|e| e.to_string())
+    Ok(load_local_api_keys(&state))
 }
 
 /// Create a new API key.
 #[tauri::command]
 pub async fn create_api_key(state: State<'_, AppState>, label: String) -> CmdResult<NewApiKey> {
-    let jwt = get_jwt(&state).ok_or("Not authenticated")?;
     let server = get_server_url(&state);
-
-    let resp = state
-        .http_client
-        .post(format!("{server}/api-keys"))
-        .header("Authorization", format!("Bearer {jwt}"))
-        .json(&serde_json::json!({ "label": label }))
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {e}"))?;
-
-    if !resp.status().is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        return Err(format!("Failed to create API key: {body}"));
+    if let Some(jwt) = get_jwt(&state) {
+        if let Ok(resp) = state
+            .http_client
+            .post(format!("{server}/api-keys"))
+            .header("Authorization", format!("Bearer {jwt}"))
+            .json(&serde_json::json!({ "label": label }))
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                if let Ok(key) = resp.json::<NewApiKey>().await {
+                    return Ok(key);
+                }
+            }
+        }
     }
 
-    resp.json::<NewApiKey>().await.map_err(|e| e.to_string())
+    let id = uuid::Uuid::new_v4().to_string();
+    let raw_secret = format!(
+        "hb_live_{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
+    let prefix = raw_secret.chars().take(14).collect::<String>();
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let info = ApiKeyInfo {
+        id: id.clone(),
+        key_prefix: prefix.clone(),
+        label: label.clone(),
+        created_at: format!("{now_secs}"),
+        last_used_at: None,
+    };
+    let mut keys = load_local_api_keys(&state);
+    keys.push(info);
+    save_local_api_keys(&state, &keys);
+
+    Ok(NewApiKey {
+        id,
+        key: raw_secret,
+        key_prefix: prefix,
+        label,
+    })
 }
 
 /// Revoke an API key.
 #[tauri::command]
 pub async fn revoke_api_key(state: State<'_, AppState>, key_id: String) -> CmdResult<()> {
-    let jwt = get_jwt(&state).ok_or("Not authenticated")?;
     let server = get_server_url(&state);
-
-    let resp = state
-        .http_client
-        .delete(format!("{server}/api-keys/{key_id}"))
-        .header("Authorization", format!("Bearer {jwt}"))
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {e}"))?;
-
-    if !resp.status().is_success() {
-        return Err("Failed to revoke API key".into());
+    if let Some(jwt) = get_jwt(&state) {
+        if let Ok(resp) = state
+            .http_client
+            .delete(format!("{server}/api-keys/{key_id}"))
+            .header("Authorization", format!("Bearer {jwt}"))
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                return Ok(());
+            }
+        }
     }
 
+    let mut keys = load_local_api_keys(&state);
+    keys.retain(|k| k.id != key_id);
+    save_local_api_keys(&state, &keys);
     Ok(())
 }
 

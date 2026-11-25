@@ -990,19 +990,22 @@ fn generate_blocking(loaded: &LoadedModel, req: &GenerateRequest) -> Result<Stri
         }
 
         generated_tokens.push(next_token);
-        if let Ok(text) = loaded.tokenizer.decode(&generated_tokens, true) {
-            output = text;
-        }
 
-        // Check stop sequences
-        if req.stop_sequences.iter().any(|stop| output.ends_with(stop)) {
-            for stop in &req.stop_sequences {
-                if output.ends_with(stop) {
-                    output.truncate(output.len() - stop.len());
+        // Check stop sequences on the tail slice only (avoids O(N^2) full-sequence decode)
+        if !req.stop_sequences.is_empty() {
+            let tail_start = generated_tokens.len().saturating_sub(16);
+            if let Ok(tail_text) = loaded
+                .tokenizer
+                .decode(&generated_tokens[tail_start..], true)
+            {
+                if req
+                    .stop_sequences
+                    .iter()
+                    .any(|stop| tail_text.ends_with(stop))
+                {
                     break;
                 }
             }
-            break;
         }
 
         // Next forward pass (single token)
@@ -1018,6 +1021,16 @@ fn generate_blocking(loaded: &LoadedModel, req: &GenerateRequest) -> Result<Stri
         let last_logits = extract_last_logits(&logits)?;
 
         next_token = sample_token(&last_logits, req.sampling.temperature, req.sampling.top_p)?;
+    }
+
+    if let Ok(text) = loaded.tokenizer.decode(&generated_tokens, true) {
+        output = text;
+        for stop in &req.stop_sequences {
+            if output.ends_with(stop) {
+                output.truncate(output.len() - stop.len());
+                break;
+            }
+        }
     }
 
     Ok(output)

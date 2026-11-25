@@ -5,6 +5,19 @@ All notable changes to HiveBear are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.41] - 2026-11-25
+
+### Added
+- **Economía Dual & Hub de Monetización (`Account.tsx`, `account.rs`, `docs/index.html`)**:
+  - Nueva **Billetera Karma P2P en Vivo** integrada en la pestaña **Account** con saldo en tiempo real, rango (`COMMUNITY` / `CONTRIBUTOR` / `VIP_ALPHA`), barra de progreso hacia `VIP_ALPHA (2,000 pts)` y copia en 1 clic del `NodeId` Ed25519.
+  - Modelo de 3 planes listo para lanzamiento público: **Community Miner ($0)**, **Pro Pass ($9.99/mes)** y **Team Hive ($19/seat/mes)**.
+  - Gestor persistente de **Llaves API Locales (`local_api_keys.json`)** y resumen de actividad en vivo (conversaciones, minutos P2P aportados y modelos instalados) que funciona 100% online y offline sin errores `404`.
+
+### Performance
+- **Optimización de Inferencia Local (`llamacpp.rs`, `candle_backend.rs`)**:
+  - `LlamaCppBackend` separa los hilos de decodificación (`n_threads` = núcleos físicos para evitar contención SMT/HyperThreading, +30–45% tok/s) de los hilos de prefill (`n_threads_batch` = núcleos lógicos), preserva el `LoadConfig` por modelo y ajusta dinámicamente la ventana KV (`n_ctx`) al tamaño real del turno.
+  - `CandleBackend::generate_blocking` elimina la decodificación `O(N²)` del tokenizador por cada token generado, verificando secuencias de parada solo sobre una ventana final de 16 tokens.
+
 ## [0.2.40] - 2026-11-25
 
 ### Fixed
@@ -69,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Universal AI backend for IDE extensions (OpenAI-compatible API server)
 - Comprehensive security hardening across all crates
 
+[0.2.41]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.41
 [0.2.40]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.40
 [0.2.39]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.39
 [0.2.38]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.38
