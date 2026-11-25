@@ -20,8 +20,8 @@ use crate::peer::NodeId;
 pub struct QuicTransport {
     local_id: NodeId,
     endpoint: Mutex<Option<Endpoint>>,
-    /// Connected peers: NodeId -> QUIC connection.
-    connections: DashMap<Vec<u8>, quinn::Connection>,
+    /// Connected peers: NodeId -> QUIC connection (shared with the accept loop).
+    connections: Arc<DashMap<Vec<u8>, quinn::Connection>>,
     /// Inbound message channel.
     inbox_tx: mpsc::UnboundedSender<(NodeId, MeshMessage)>,
     inbox_rx: Mutex<mpsc::UnboundedReceiver<(NodeId, MeshMessage)>>,
@@ -46,7 +46,7 @@ impl QuicTransport {
         Self {
             local_id,
             endpoint: Mutex::new(None),
-            connections: DashMap::new(),
+            connections: Arc::new(DashMap::new()),
             inbox_tx,
             inbox_rx: Mutex::new(inbox_rx),
             security_mode,
@@ -155,6 +155,7 @@ impl MeshTransport for QuicTransport {
         let conn = self
             .connections
             .get(&key)
+            .map(|r| r.value().clone())
             .ok_or_else(|| MeshError::PeerDisconnected(peer.to_string()))?;
 
         let data = protocol::encode(&msg)?;
@@ -306,7 +307,7 @@ impl MeshTransport for QuicTransport {
         }
 
         let inbox_tx = self.inbox_tx.clone();
-        let connections = self.connections.clone();
+        let connections = Arc::clone(&self.connections);
         let local_id = self.local_id.clone();
 
         // Spawn acceptor task

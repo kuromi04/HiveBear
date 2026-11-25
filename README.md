@@ -21,7 +21,7 @@
 <p align="center">
   <a href="https://github.com/kuromi04/TermuxHiveBear"><img src="https://img.shields.io/badge/Termux-Supported-brightgreen?logo=android" alt="Termux Support" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
-  <a href="https://github.com/kuromi04/HiveBear/releases/latest"><img src="https://img.shields.io/badge/release-v0.2.39-cyan.svg" alt="Latest Release" /></a>
+  <a href="https://github.com/kuromi04/HiveBear/releases/latest"><img src="https://img.shields.io/badge/release-v0.2.40-cyan.svg" alt="Latest Release" /></a>
   <a href="https://github.com/kuromi04/HiveBear/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/kuromi04/HiveBear/release.yml?label=release%20build" alt="Release build" /></a>
   <a href="https://kuromi04.github.io/HiveBear/"><img src="https://img.shields.io/badge/Official%20Website-Online-ff007f.svg" alt="Official Website" /></a>
 </p>
@@ -48,7 +48,7 @@
 - 📖 **New Visual Documentation:** Read our [Beginner's Guide to HiveBear P2P Magic](docs/HOW_IT_WORKS.md).
 - 🚀 **hivebear-coordinator (P2P Signaling Server):** Dedicated, lightweight Rust HTTP server with Docker support to coordinate P2P mesh discovery, STUN hole-punching, and swarm matchmaking worldwide.
 - 🛡️ **Cybersecurity Hardened:** Mitigated Denial-of-Service (DoS) and memory leak risks by bounding signal buffers (max 50 queue per peer) and cleaning inactive state.
-- 📱 **Native Android APK (`v0.2.39`):** Dual signed (v1 + v2), responsive edge-to-edge UI, pure Rust Candle engine, WiFi Multicast discovery, and direct P2P LAN connection to desktop nodes.
+- 📱 **Native Android APK (`v0.2.40`):** Dual signed (v1 + v2), responsive edge-to-edge UI, pure Rust Candle engine, WiFi Multicast discovery, and direct P2P LAN connection to desktop nodes.
 - 🔗 **Direct LAN P2P Offloading:** Stream tokens directly from desktop nodes to phones via local WiFi IP with QUIC TLS 1.3 even when offline or when cloud coordinators are unreachable.
 - 📱 **Termux & Mobile Integration ([TermuxHiveBear](https://github.com/kuromi04/TermuxHiveBear)):** Seamlessly connect Android smartphones running Termux to your desktop AI mesh network.
 - 📥 **HF Nested Path Download Fix:** Resolved `OS error 3` path errors when downloading HuggingFace models with subdirectories (`Q4_K_M/model.gguf`).
@@ -58,7 +58,7 @@
 
 ---
 
-### 📸 Official Screenshots (`v0.2.39` — Desktop `.exe` & Android `.apk`)
+### 📸 Official Screenshots (`v0.2.40` — Desktop `.exe` & Android `.apk`)
 
 | 🪟 Desktop Dashboard & Live Karma | 🌐 P2P Mesh & Karma Leaderboard | 📱 Android APK (`PC Mesh` & Local GGUF) |
 | :---: | :---: | :---: |
@@ -189,7 +189,7 @@ Before building, install all required dependencies automatically:
 - 📖 **Nueva Documentación Visual:** Lee nuestra [Guía para principiantes: Cómo funciona la Magia P2P](docs/HOW_IT_WORKS.md).
 - 🚀 **Servidor Coordinador P2P (`hivebear-coordinator`):** Servidor HTTP ultraligero en Rust con Docker para señalización, STUN hole-punching y emparejamiento de nodos global.
 - 🛡️ **Seguridad Mejorada:** Prevención de ataques DoS y fugas de memoria con buffers acotados (máximo 50 mensajes en cola por nodo) y purga automática de nodos inactivos.
-- 📱 **APK Nativo para Android (`v0.2.39`):** Doble firma (v1 + v2) para instalación universal, interfaz responsive edge-to-edge, motor puro Rust Candle, auto-descubrimiento WiFi Multicast y conexión directa a PCs.
+- 📱 **APK Nativo para Android (`v0.2.40`):** Doble firma (v1 + v2) para instalación universal, interfaz responsive edge-to-edge, motor puro Rust Candle, auto-descubrimiento WiFi Multicast y conexión directa a PCs.
 - 🔗 **Inferencia Directa P2P en Red Local (LAN):** Chatea en tu móvil usando el poder de procesamiento y modelos de tu PC vía WiFi (IP local) con cifrado QUIC TLS 1.3, sin depender de internet ni servidores coordinadores caídos.
 - 📱 **Integración Móvil Android ([TermuxHiveBear](https://github.com/kuromi04/TermuxHiveBear)):** Conecta cualquier smartphone Android a la red distribuida de IA.
 - 📥 **Corrección de Rutas Anidadas HF:** Solución al error `OS error 3` al descargar modelos de HuggingFace en subdirectorios.

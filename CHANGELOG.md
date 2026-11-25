@@ -5,6 +5,12 @@ All notable changes to HiveBear are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.40] - 2026-11-25
+
+### Fixed
+- **CRÍTICO — Conexión P2P QUIC APK ↔ PC (QuicTransport::connections)**: self.connections era un DashMap clonado por valor en listen() en lugar de un Arc<DashMap>, por lo que todas las conexiones entrantes quedaban aisladas en un mapa privado del acceptor y MeshWorkerDaemon::send() devolvía PeerDisconnected silenciosamente (provocando Tiempo de espera agotado en cada mensaje del móvil). Envolverlo en Arc<DashMap> y clonar el handle quinn::Connection antes del .await resolvió el bloqueo por completo (latencia verificada de ~3 ms en quic_daemon_roundtrip).
+- **Condición de carrera al iniciar Mesh (AppState::start_mesh)**: evitado crear un segundo MeshNode duplicado mientras el primer nodo completa STUN al arrancar la app.
+
 ## [0.2.39] - 2026-11-23
 
 ### Added
@@ -63,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Universal AI backend for IDE extensions (OpenAI-compatible API server)
 - Comprehensive security hardening across all crates
 
+[0.2.40]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.40
 [0.2.39]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.39
 [0.2.38]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.38
 [0.2.37]: https://github.com/kuromi04/HiveBear/releases/tag/v0.2.37

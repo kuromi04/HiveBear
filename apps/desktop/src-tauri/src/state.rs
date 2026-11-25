@@ -299,7 +299,7 @@ impl AppState {
     pub fn start_mesh(&self) -> Result<(), String> {
         {
             let existing = self.mesh_node.lock().unwrap_or_else(|e| e.into_inner());
-            if existing.as_ref().is_some_and(|n| n.is_running()) {
+            if existing.is_some() {
                 return Ok(());
             }
         }
