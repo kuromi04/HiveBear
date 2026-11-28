@@ -4,6 +4,7 @@
     <base-config cleartextTrafficPermitted="false" />
     <!-- Allow plain HTTP only for the P2P Coordinator VM and local loopback -->
     <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">34-63-209-220.sslip.io</domain>
         <domain includeSubdomains="false">34.63.209.220</domain>
         <domain includeSubdomains="false">127.0.0.1</domain>
         <domain includeSubdomains="false">localhost</domain>

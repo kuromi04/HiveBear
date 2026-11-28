@@ -108,7 +108,11 @@ fn default_true() -> bool {
 }
 
 fn default_bootstrap_servers() -> Vec<String> {
-    vec!["https://mesh.hivebear.com".into()]
+    vec![
+        "https://34-63-209-220.sslip.io".into(),
+        "http://34-63-209-220.sslip.io".into(),
+        "http://34.63.209.220".into(),
+    ]
 }
 
 fn default_stun_servers() -> Vec<String> {
